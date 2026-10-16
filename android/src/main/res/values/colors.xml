@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="neon_green">#FF39FF14</color>
+    <color name="neon_cyan">#FF00E5FF</color>
+    <color name="hud_dim">#B3000000</color>
+</resources>
