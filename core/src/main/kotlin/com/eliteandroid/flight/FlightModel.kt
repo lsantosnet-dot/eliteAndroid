@@ -182,7 +182,11 @@ class FlightModel {
         for (tick in before + 1..player.mainLoopCounter.toInt()) {
             when (tick % 32) {
                 0 -> if (spawnStation()) event = FlightEvent.STATION_APPEARED
-                10 -> if (!checkAltitude()) return FlightEvent.CRASHED
+                10 -> {
+                    if (player.energy < 50f) combat.messages += "ENERGY LOW"
+                    if (!checkAltitude()) return FlightEvent.CRASHED
+                }
+                20 -> if (!sunHeat()) return FlightEvent.CRASHED
             }
             if (tick % 256 == 0) combat.spawnCheck()
             // MVEIT parte 2: TACTICS a cada 8 ciclos por nave (escalonado pelo slot); mísseis sempre.
@@ -235,6 +239,40 @@ class FlightModel {
         if (a2 <= 0f) return false
         player.altitude = sqrt(a2).coerceAtMost(255f)
         return player.altitude >= 1f
+    }
+
+    /**
+     * Parte 15, iteração 20: a temperatura da cabine volta a 30 e, perto do sol (todos os
+     * eixos < 65536), CABTMP = 255 − A + 30, com A = Σ(coordenada_hi²)/256 (MAS3).
+     * Se passar de 255, morremos queimados. A partir de 224, com coletores instalados,
+     * recolhemos combustível: QQ14 += DELTA/8, até 70 ("FUEL SCOOPS ON").
+     * Retorna false se o jogador morreu.
+     */
+    private fun sunHeat(): Boolean {
+        player.cabinTemp = 30f
+        val s = sun ?: return true
+        if (station != null || maxSign(s.position) > 0) return true
+        val p = s.position
+        fun sq(c: Float) = (abs(c) / 256f).toInt().let { it * it / 256 }
+        val a = sq(p.x) + sq(p.y) + sq(p.z)
+        if (a > 255) return true // MAS3 estourou: A = 255, CABTMP = 31
+        val temp = 255 - a + 30
+        if (temp > 255) return false
+        player.cabinTemp = temp.toFloat()
+        if (temp >= 224 && player.fuelScoops) {
+            player.fuel = (player.fuel + (player.speed / 8f).toInt()).coerceAtMost(70f)
+            combat.messages += "FUEL SCOOPS ON"
+        }
+        return true
+    }
+
+    /**
+     * "C" (MA64): com o computador de atracação, dentro da zona segura e a estação não
+     * hostil, a atracação é imediata (GOIN).
+     */
+    fun canUseDockingComputer(): Boolean {
+        val st = station ?: return false
+        return player.dockingComputer && !st.hostile
     }
 
     fun addShip(ship: ShipInstance) {

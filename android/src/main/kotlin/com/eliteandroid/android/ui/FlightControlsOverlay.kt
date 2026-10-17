@@ -15,7 +15,10 @@ import com.eliteandroid.flight.View as SpaceDirection
  *
  *  - manche flutuante na esquerda (rolagem/arfagem);
  *  - acelerador vertical na borda direita, FIRE (segurar), MISSILE, HYPER e JUMP;
- *  - câmeras F/R/L/D no canto superior direito.
+ *  - câmeras F/R/L/D no canto superior direito;
+ *  - no alto, ao centro, os equipamentos instalados: E.C.M., bomba de energia,
+ *    computador de atracação (só na zona segura), cápsula de fuga e hiperpropulsor
+ *    galáctico.
  * (Atracado, quem aparece é o [StationPanel].)
  *
  * Tudo escreve em [com.eliteandroid.input.TouchControls] (thread-safe) e o estado do jogo
@@ -60,6 +63,21 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         onClick = { touch?.jumpRequest = true },
     )
 
+    private fun equipButton(label: String, color: Int, onClick: () -> Unit) =
+        NeonButton(context, label, color, round = false, textSizeDp = 11f, onClick = onClick)
+
+    private val ecm = equipButton("ECM", NeonStyle.CYAN) { touch?.ecmRequest = true }
+    private val bomb = equipButton("BOMB", NeonStyle.RED) { touch?.bombRequest = true }
+    private val dock = equipButton("DOCK", NeonStyle.GREEN) { touch?.dockRequest = true }
+    private val eject = equipButton("EJECT", NeonStyle.YELLOW) { touch?.escapeRequest = true }
+    private val galactic = equipButton("G-HYP", NeonStyle.MAGENTA) { touch?.galacticRequest = true }
+    private val equipRow = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        listOf(ecm, bomb, dock, eject, galactic).forEach {
+            addView(it, LinearLayout.LayoutParams(dp(64f), dp(40f)).apply { marginStart = dp(4f); marginEnd = dp(4f) })
+        }
+    }
+
     private val viewButtons = SpaceDirection.entries.map { dir ->
         NeonButton(context, VIEW_LABELS[dir.ordinal], NeonStyle.GREEN, round = false, textSizeDp = 14f,
             onClick = { touch?.viewRequest = dir })
@@ -100,6 +118,10 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         })
         addView(viewRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.TOP).apply {
             topMargin = dp(6f); marginEnd = dp(6f)
+        })
+        // Abaixo do nome da vista ("FRONT VIEW"), que o jogo escreve no alto, ao centro.
+        addView(equipRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(40f)
         })
         setFlightControlsVisible(false)
     }
@@ -157,12 +179,22 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         hyper.lit = countdown > 0
         hyper.label = if (countdown > 0) "HYP $countdown" else "HYPER"
         hyper.invalidate()
+
+        val p = model.player
+        fun show(b: NeonButton, on: Boolean) { b.visibility = if (on) View.VISIBLE else View.GONE }
+        show(ecm, p.hasEcm)
+        ecm.lit = c.ourEcm; ecm.invalidate()
+        show(bomb, p.energyBomb)
+        show(dock, model.canUseDockingComputer())
+        show(eject, p.escapePod)
+        show(galactic, p.galacticHyperdrive)
     }
 
     private fun setFlightControlsVisible(visible: Boolean) {
         val v = if (visible) View.VISIBLE else View.GONE
         flightControls.forEach { it.visibility = v }
         viewRow.visibility = v
+        equipRow.visibility = v
     }
 
     private companion object {

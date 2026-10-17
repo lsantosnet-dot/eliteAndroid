@@ -12,5 +12,6 @@ object NeonPalette {
     val LASER: Float = Color(1.00f, 0.35f, 0.30f, 1f).toFloatBits()
     val HYPERSPACE: Float = Color(0.85f, 0.35f, 1.00f, 1f).toFloatBits()
     val HUD_DIM: Float = Color(0.20f, 0.55f, 0.30f, 0.6f).toFloatBits()
+    val FLASH: Float = Color(1.00f, 1.00f, 1.00f, 0.8f).toFloatBits()
     val DUST: Float = Color(0.75f, 0.80f, 1.00f, 0.9f).toFloatBits()
 }

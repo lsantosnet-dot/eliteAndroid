@@ -51,6 +51,18 @@ class Commander {
         return TradeResult.OK
     }
 
+    /** Contêiner recolhido pelos coletores: 1 unidade de [index], se houver lugar (tnpr). */
+    @Synchronized fun scoop(index: Int): Boolean {
+        if (!hasRoom(index, 1)) return false
+        cargo[index]++
+        return true
+    }
+
+    /** ESCAPE: a cápsula de fuga deixa toda a carga para trás. */
+    @Synchronized fun loseCargo() {
+        cargo.fill(0)
+    }
+
     /** Restaura dinheiro, porão e capacidade de um jogo salvo. */
     @Synchronized fun restore(cash: Long, cargo: IntArray, capacity: Int) {
         this.cash = cash

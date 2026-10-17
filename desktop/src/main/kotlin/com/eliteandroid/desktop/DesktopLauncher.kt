@@ -19,7 +19,8 @@ import com.eliteandroid.flight.View
  * [--roll]/[--pitch] (−1..1), velocidade-alvo [--speed] (1..40) e fotografa na vista
  * [--view] (front, rear, left, right). [--fire] captura com o laser disparando,
  * [--arrive NOME] chega pelo hiperespaço nesse sistema, [--jumps N] dá N saltos "J" e
- * [--docked] fotografa a tela de atracado:
+ * [--docked] fotografa a tela de atracado; [--beam] instala um laser de feixe na frente e
+ * [--bomb] detona a bomba de energia (com [--combat], no meio da batalha):
  *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
 fun main(args: Array<String>) {
@@ -35,6 +36,8 @@ fun main(args: Array<String>) {
         arrive = args.valueAfter("--arrive"),
         jumps = args.valueAfter("--jumps")?.toInt() ?: 0,
         combat = "--combat" in args,
+        beam = "--beam" in args,
+        bomb = "--bomb" in args,
     )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
@@ -67,6 +70,8 @@ private class ShotSpec(
     val arrive: String?,
     val jumps: Int,
     val combat: Boolean,
+    val beam: Boolean,
+    val bomb: Boolean,
 )
 
 /** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
@@ -84,12 +89,14 @@ private class ScreenshotWrapper(
             if (target != null) session.arriveNow(target) else session.launchNow()
             repeat(shot.jumps) { session.model.inSystemJump() }
             if (shot.combat) stageCombat(session.model)
+            if (shot.beam) session.model.player.lasers[0] = com.eliteandroid.flight.PlayerShip.BEAM_LASER
             val controls = FlightControls().apply { stickX = shot.roll; stickY = shot.pitch; targetSpeed = shot.speed }
             var t = 0f
             while (t < shot.time) { session.model.update(1f / 60f, controls); t += 1f / 60f }
             // Segura o gatilho (o quadro só é gravado com o feixe aceso).
             if (shot.fire) session.input.touch.fire = true
             session.model.view = shot.view
+            if (shot.bomb) { session.model.player.energyBomb = true; session.model.combat.detonateBomb() }
         }
         game.render()
         frames++

@@ -23,4 +23,11 @@ class TouchControls {
     @Volatile var jumpRequest = false
     /** Botão MISSILE: arma; com alvo travado, dispara; armado sem alvo, desarma. */
     @Volatile var missileRequest = false
+
+    // Equipamentos (os botões só aparecem se o item estiver instalado).
+    @Volatile var ecmRequest = false
+    @Volatile var bombRequest = false
+    @Volatile var dockRequest = false
+    @Volatile var escapeRequest = false
+    @Volatile var galacticRequest = false
 }

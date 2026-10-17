@@ -197,7 +197,7 @@ level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremul
 256 × 192); a tela larga só amplia a visão lateral.
 
 Fora do escopo por enquanto: mis-jumps para o witchspace (0.78% dos saltos, com
-Thargoids), equipamentos além de combustível e coleta de combustível no sol.
+Thargoids).
 
 ## Naves inimigas e mísseis
 
@@ -225,6 +225,33 @@ mísseis, recompensa, contêineres, vértice do canhão, explosão).
   alvo; alvos com E.C.M. podem destruí-lo (6% por ciclo). Mísseis inimigos causam 250.
 - **Abates**: explosão (DOEXP), recompensa em créditos, contagem para a classificação
   (Harmless … Elite) e 50% de chance de soltar contêineres. Colisões: 128 + energia/2.
+
+## Loja de equipamentos
+
+![Laser de feixe](docs/feixe.png)
+
+A aba **EQUIP** é o "Equip Ship" (EQSHP) do original: os itens à venda dependem do tech
+level do sistema (os primeiros `tek + 3`, até 12), com os preços da tabela PRXS.
+
+| Item | Preço | Efeito |
+|---|---|---|
+| Fuel | 0.2 Cr / 0.1 LY | enche o tanque (7.0 LY) |
+| Missile | 30 Cr | até 4 ("ALL PRESENT") |
+| Large Cargo Bay | 400 Cr | porão de 20 t → 35 t |
+| E.C.M. System | 600 Cr | **E** / botão ECM: destrói todos os mísseis por 32 ciclos, gastando 1 de energia por ciclo |
+| Pulse Laser | 400 Cr | numa vista sem laser (escolha FRONT/REAR/LEFT/RIGHT) |
+| Beam Laser | 1000 Cr | dispara a cada ciclo do loop principal (esquenta mais rápido); troca o de pulso devolvendo 400 Cr |
+| Fuel Scoops | 525 Cr | combustível perto do sol (CABTMP ≥ 224: +velocidade/8) e contêineres que passem **por baixo** da nave (item aleatório; cápsulas viram escravos) |
+| Escape Pod | 1000 Cr | **ESC** / EJECT: volta à estação com um Cobra novo e tanque cheio, perdendo a carga; a ficha fica limpa |
+| Energy Bomb | 900 Cr | **TAB** / BOMB: destrói todas as naves por perto, menos a estação (uso único) |
+| Energy Unit | 1500 Cr | recarga de energia em dobro |
+| Docking Computers | 1000 Cr | **C** / DOCK: atracação imediata na zona segura (estação não hostil) |
+| Galactic Hyperspace | 5000 Cr | **CTRL-H** / G-HYP: salto para a galáxia seguinte (8 → 1), chegando ao sistema mais perto de (96, 96); limpa a ficha (uso único) |
+
+Em voo, os botões dos equipamentos instalados aparecem no alto da tela. O **sol** também
+esquenta a cabine (barra CT): perto demais (A < 30, com A = Σ coordenada_hi²/256), a nave
+queima. A tela STATUS lista o equipamento, e o jogo salvo (versão 2) guarda tudo — saves
+da versão 1 continuam carregando, com o equipamento de fábrica.
 
 ## Jogo salvo
 

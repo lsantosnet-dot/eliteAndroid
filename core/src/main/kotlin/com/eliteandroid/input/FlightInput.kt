@@ -12,6 +12,8 @@ import com.eliteandroid.flight.View
  * para baixo, Espaço acelera e "?"/"/" desacelera, "A" dispara o laser, "H" aciona o
  * hiperespaço e "J" o salto dentro do sistema; "T" arma o míssil, "M" dispara e "U"
  * desarma; setas também funcionam. F1–F4 ou 1–4 escolhem a vista e L/Enter decola.
+ * Equipamentos: "E" liga o E.C.M., TAB detona a bomba de energia, "C" usa o computador
+ * de atracação, ESC ejeta a cápsula de fuga e CTRL-H aciona o hiperpropulsor galáctico.
  *
  * Toque: [touch], preenchido pela interface Android (manche, acelerador e botões).
  * O manche analógico funciona como o joystick do original (define JSTX/JSTY direto);
@@ -31,6 +33,11 @@ class FlightInput {
     var missileFire = false
     var missileUnarm = false
     var missileSmart = false
+    var ecmRequested = false
+    var bombRequested = false
+    var dockRequested = false
+    var escapeRequested = false
+    var galacticRequested = false
 
     fun poll() {
         val k = Gdx.input
@@ -61,9 +68,17 @@ class FlightInput {
         if (k.isKeyJustPressed(Keys.L) || k.isKeyJustPressed(Keys.ENTER) || touch.launchRequest) {
             launchRequested = true; touch.launchRequest = false
         }
-        if (k.isKeyJustPressed(Keys.H) || touch.hyperspaceRequest) {
+        val ctrl = k.isKeyPressed(Keys.CONTROL_LEFT) || k.isKeyPressed(Keys.CONTROL_RIGHT)
+        if ((k.isKeyJustPressed(Keys.H) && !ctrl) || touch.hyperspaceRequest) {
             hyperspaceRequested = true; touch.hyperspaceRequest = false
         }
+        if ((k.isKeyJustPressed(Keys.H) && ctrl) || touch.galacticRequest) {
+            galacticRequested = true; touch.galacticRequest = false
+        }
+        if (k.isKeyJustPressed(Keys.E) || touch.ecmRequest) { ecmRequested = true; touch.ecmRequest = false }
+        if (k.isKeyJustPressed(Keys.TAB) || touch.bombRequest) { bombRequested = true; touch.bombRequest = false }
+        if (k.isKeyJustPressed(Keys.C) || touch.dockRequest) { dockRequested = true; touch.dockRequest = false }
+        if (k.isKeyJustPressed(Keys.ESCAPE) || touch.escapeRequest) { escapeRequested = true; touch.escapeRequest = false }
         if (k.isKeyJustPressed(Keys.J) || touch.jumpRequest) {
             jumpRequested = true; touch.jumpRequest = false
         }

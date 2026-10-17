@@ -16,13 +16,17 @@ import android.widget.TextView
 import com.eliteandroid.GameSession
 import com.eliteandroid.economy.Commander
 import com.eliteandroid.economy.Commodities
+import com.eliteandroid.economy.Equipment
+import com.eliteandroid.flight.PlayerShip
+import com.eliteandroid.flight.View as SpaceDirection
 import com.eliteandroid.galaxy.GalaxyGenerator
 import java.util.Locale
 
 /**
  * Telas da estação (atracado), como as teclas de função do original:
  * MARKET (preços e compra/venda: "Buy Cargo"/"Sell Cargo"), STATUS (Commander),
- * EQUIP (combustível), CHART (mapas) e DATA (Data on System). LAUNCH decola.
+ * EQUIP ("Equip Ship": combustível, mísseis, lasers e os demais itens, conforme o tech
+ * level do sistema), CHART (mapas) e DATA (Data on System). LAUNCH decola.
  */
 @SuppressLint("ViewConstructor")
 class StationPanel(context: Context, private val session: () -> GameSession?) : LinearLayout(context) {
@@ -44,8 +48,12 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     private val statusBox = LinearLayout(context).apply { orientation = VERTICAL }
     private var newGameArmedAt = 0L
     private val dataText = text(13f, NeonStyle.GREEN)
-    private val equipBox = LinearLayout(context).apply { orientation = VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
-    private val equipText = text(14f, NeonStyle.GREEN)
+    private val equipBox = LinearLayout(context).apply { orientation = VERTICAL }
+    private val equipRows = LinearLayout(context).apply { orientation = VERTICAL }
+    private val equipRowViews = HashMap<Equipment, Pair<View, Array<TextView>>>()
+    /** Vista onde os lasers comprados serão instalados (qv: "VIEW ?"). */
+    private var laserView = SpaceDirection.FRONT
+    private val laserViewButtons = HashMap<SpaceDirection, TextView>()
     val chart = ChartView(context, session)
     private val chartBox = LinearLayout(context).apply { orientation = VERTICAL }
 
@@ -79,8 +87,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
             addView(button("NEW GAME", NeonStyle.RED) { newGame() }, LayoutParams(0, dp(42f), 1f))
         }
         statusBox.addView(saveRow)
-        equipBox.addView(equipText)
-        equipBox.addView(button("BUY FUEL", NeonStyle.YELLOW) { refuel() }, LayoutParams(dp(200f), dp(48f)).apply { topMargin = dp(16f) })
+        buildEquipRows()
         val chartToggle = LinearLayout(context).apply {
             orientation = HORIZONTAL
             addView(button("SHORT RANGE", NeonStyle.CYAN) { chart.longRange = false }, LayoutParams(0, dp(36f), 1f).apply { marginEnd = dp(6f) })
@@ -147,6 +154,70 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         }
     }
 
+    /**
+     * "Equip Ship": uma linha por item (nome, preço, o que já está instalado, BUY) e, para
+     * os lasers, a escolha da vista (FRONT/REAR/LEFT/RIGHT).
+     */
+    private fun buildEquipRows() {
+        val views = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        views.addView(text(12f, NeonStyle.CYAN).apply { text = "LASER VIEW " }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        SpaceDirection.entries.forEach { v ->
+            val b = button(v.name, NeonStyle.CYAN) { laserView = v; refresh() }
+            laserViewButtons[v] = b
+            views.addView(b, LayoutParams(0, dp(32f), 1f).apply { marginStart = dp(4f) })
+        }
+        equipBox.addView(views, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(4f) })
+        equipBox.addView(ScrollView(context).apply { addView(equipRows) }, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        Equipment.entries.forEach { item ->
+            val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val cells = arrayOf(text(13f, NeonStyle.GREEN), text(13f, NeonStyle.YELLOW), text(12f, NeonStyle.CYAN))
+            cells[0].text = item.label
+            listOf(3.4f, 1.6f, 2.6f).forEachIndexed { i, w -> row.addView(cells[i], LayoutParams(0, LayoutParams.WRAP_CONTENT, w)) }
+            row.addView(button("BUY", NeonStyle.GREEN) { buyEquipment(item) }, LayoutParams(0, dp(34f), 1.2f))
+            equipRows.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3f) })
+            equipRowViews[item] = row to cells
+        }
+    }
+
+    private fun buyEquipment(item: Equipment) {
+        val sess = session() ?: return
+        val cost = Equipment.price(item, sess.model.player)
+        feedback.text = when (sess.buyEquipment(item, laserView)) {
+            Equipment.Result.OK -> "${item.label.uppercase(Locale.US)} FITTED: " + Commander.formatCredits(cost)
+            Equipment.Result.NO_CASH -> "NOT ENOUGH CASH"
+            Equipment.Result.PRESENT -> if (item.needsView) "LASER PRESENT" else "${item.label.uppercase(Locale.US)} PRESENT"
+            Equipment.Result.ALL_PRESENT -> "ALL PRESENT"
+            Equipment.Result.NOT_AVAILABLE -> "NOT AVAILABLE HERE"
+        }
+        refresh()
+    }
+
+    /** O que já está instalado para [item]. */
+    private fun fitted(item: Equipment, p: PlayerShip, cmdr: Commander): String = when (item) {
+        Equipment.FUEL -> String.format(Locale.US, "%.1f LY", p.fuel / 10f)
+        Equipment.MISSILE -> "${p.missiles}/${Equipment.MAX_MISSILES}"
+        Equipment.LARGE_CARGO_BAY -> if (cmdr.cargoCapacity >= Equipment.LARGE_CARGO_CAPACITY) "FITTED" else ""
+        Equipment.ECM -> if (p.hasEcm) "FITTED" else ""
+        Equipment.PULSE_LASER -> laserViews(p) { it != 0 && it and 0x80 == 0 }
+        Equipment.BEAM_LASER -> laserViews(p) { it and 0x80 != 0 }
+        Equipment.FUEL_SCOOPS -> if (p.fuelScoops) "FITTED" else ""
+        Equipment.ESCAPE_POD -> if (p.escapePod) "FITTED" else ""
+        Equipment.ENERGY_BOMB -> if (p.energyBomb) "FITTED" else ""
+        Equipment.ENERGY_UNIT -> if (p.energyUnit) "FITTED" else ""
+        Equipment.DOCKING_COMPUTER -> if (p.dockingComputer) "FITTED" else ""
+        Equipment.GALACTIC_HYPERDRIVE -> if (p.galacticHyperdrive) "FITTED" else ""
+    }
+
+    private fun laserViews(p: PlayerShip, match: (Int) -> Boolean): String =
+        SpaceDirection.entries.filter { match(p.lasers[it.ordinal]) }.joinToString(" ") { it.name.take(1) }
+
+    /** Lasers instalados, como na tela "Commander": "Front Pulse Laser", "Rear Beam Laser"… */
+    private fun laserList(p: PlayerShip): List<String> = SpaceDirection.entries.mapNotNull { v ->
+        val l = p.lasers[v.ordinal]
+        if (l == 0) null
+        else v.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() } + if (l and 0x80 != 0) " Beam Laser" else " Pulse Laser"
+    }
+
     private fun trade(index: Int, buy: Boolean) {
         val sess = session() ?: return
         val r = if (buy) sess.buy(index) else sess.sell(index)
@@ -183,17 +254,6 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         refresh()
     }
 
-    private fun refuel() {
-        val sess = session() ?: return
-        val cost = sess.refuelCost
-        feedback.text = when {
-            cost == 0L -> "TANK ALREADY FULL"
-            sess.refuel() -> "REFUELLED: " + Commander.formatCredits(cost)
-            else -> "NOT ENOUGH CASH"
-        }
-        refresh()
-    }
-
     /** Atualiza os textos (chamado ao abrir e a cada ação). */
     fun refresh() {
         val sess = session() ?: return
@@ -224,13 +284,32 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
             appendLine("Legal Status      : ${Commander.legal(sess.model.player.legalStatus)}")
             appendLine("Rating            : ${Commander.rating(sess.model.player.kills)}")
             appendLine()
-            appendLine("EQUIPMENT: Front Pulse Laser, ${sess.model.player.missiles} Missiles")
+            val p = sess.model.player
+            val equipment = laserList(p) + listOfNotNull(
+                "${p.missiles} Missiles",
+                if (cmdr.cargoCapacity >= Equipment.LARGE_CARGO_CAPACITY) "Large Cargo Bay" else null,
+                if (p.hasEcm) "E.C.M. System" else null,
+                if (p.fuelScoops) "Fuel Scoops" else null,
+                if (p.escapePod) "Escape Pod" else null,
+                if (p.energyBomb) "Energy Bomb" else null,
+                if (p.energyUnit) "Extra Energy Unit" else null,
+                if (p.dockingComputer) "Docking Computers" else null,
+                if (p.galacticHyperdrive) "Galactic Hyperspace" else null,
+            )
+            appendLine("EQUIPMENT:")
+            equipment.forEach { appendLine("  $it") }
             val hold = Commodities.ALL.filter { cmdr.cargo[it.index] > 0 }
             appendLine()
             appendLine("CARGO: " + if (hold.isEmpty()) "empty" else hold.joinToString { "${cmdr.cargo[it.index]}${it.unit.label} ${it.name}" })
         }
-        equipText.text = String.format(Locale.US, "FUEL  %.1f / 7.0 LIGHT YEARS\n\nFILL TANK: %s\n\nCASH: %s",
-            fuel / 10f, Commander.formatCredits(sess.refuelCost), Commander.formatCredits(cmdr.cash))
+        val forSale = sess.equipmentForSale
+        equipRowViews.forEach { (item, rv) ->
+            val (row, cells) = rv
+            row.visibility = if (item in forSale) View.VISIBLE else View.GONE
+            cells[1].text = Commander.formatCredits(Equipment.price(item, sess.model.player)).removeSuffix(" Cr")
+            cells[2].text = fitted(item, sess.model.player, cmdr)
+        }
+        laserViewButtons.forEach { (v, b) -> b.alpha = if (v == laserView) 1f else 0.45f }
         val shown = target ?: here
         dataText.text = buildString {
             if (shown !== here) appendLine(String.format(Locale.US, "Distance: %.1f Light Years", GalaxyGenerator.distance(here, shown) / 10f))

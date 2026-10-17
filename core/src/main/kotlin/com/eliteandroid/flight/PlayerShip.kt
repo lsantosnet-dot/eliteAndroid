@@ -46,6 +46,20 @@ class PlayerShip {
     /** ECM instalado (bulbo "E" do painel). */
     var hasEcm = false
 
+    // Equipamentos da loja (EQSHP), com os nomes das variáveis do original.
+    /** BST: coletores de combustível (sol) e de contêineres. */
+    var fuelScoops = false
+    /** ESCP: cápsula de fuga. */
+    var escapePod = false
+    /** BOMB: bomba de energia (uso único). */
+    var energyBomb = false
+    /** ENGY: unidade de energia extra (recarga em dobro). */
+    var energyUnit = false
+    /** DKCMP: computador de atracação. */
+    var dockingComputer = false
+    /** GHYP: hiperpropulsor galáctico (uso único). */
+    var galacticHyperdrive = false
+
     /** FIST: status legal (0 = limpo, 1..49 = infrator, 50+ = fugitivo). */
     var legalStatus = 0
     /** TALLY: naves abatidas (define a classificação de combate). */
@@ -53,9 +67,18 @@ class PlayerShip {
 
     /**
      * LASER: potência por vista (frente, trás, esquerda, direita). O Cobra sai de fábrica
-     * com um laser de pulso (potência 15) só na frente.
+     * com um laser de pulso (potência 15, [PULSE_LASER]) só na frente; o bit 7 marca o
+     * laser de feixe ([BEAM_LASER]).
      */
-    val lasers = intArrayOf(15, 0, 0, 0)
+    val lasers = intArrayOf(PULSE_LASER, 0, 0, 0)
+
+    /** Equipamento padrão do Cobra Mk III do JAMESON. */
+    fun resetEquipment() {
+        lasers[0] = PULSE_LASER; lasers.fill(0, 1)
+        missiles = 3
+        hasEcm = false; fuelScoops = false; escapePod = false; energyBomb = false
+        energyUnit = false; dockingComputer = false; galacticHyperdrive = false
+    }
 
     /** LASCT: contagem do pulso do laser em sincronismos verticais (50 por segundo). */
     var laserCount = 0f
@@ -67,8 +90,14 @@ class PlayerShip {
     var laserY = 0
         private set
 
-    /** O feixe aparece nos 3 primeiros sincronismos de cada pulso (LASCT 10..8). */
-    val laserBeamVisible: Boolean get() = laserCount >= 8f
+    /** O último disparo foi de um laser de feixe. */
+    private var beamShot = false
+
+    /**
+     * O feixe aparece nos 3 primeiros sincronismos de cada pulso (LASCT 10..8); o laser de
+     * feixe dispara a cada ciclo e fica aceso enquanto o gatilho estiver apertado.
+     */
+    val laserBeamVisible: Boolean get() = if (beamShot) laserCount > 0f else laserCount >= 8f
 
     /** MCNT: contador do loop principal (agenda recargas e o pisca do painel). */
     var mainLoopCounter = 0f
@@ -108,7 +137,7 @@ class PlayerShip {
                 aftShield = (aftShield + 1f).coerceAtMost(255f)
                 foreShield = (foreShield + 1f).coerceAtMost(255f)
             }
-            energy = (energy + 1f).coerceAtMost(255f)
+            energy = (energy + if (energyUnit) 2f else 1f).coerceAtMost(255f) // ENGY + 1
         }
     }
 
@@ -146,8 +175,9 @@ class PlayerShip {
 
     /**
      * Loop principal partes 3 e 4: o laser só dispara com LASCT = 0, temperatura < 242 e
-     * um laser instalado na vista atual. Cada disparo: LASCT = 10 (pulso → 5 tiros/s),
-     * GNTMP += 8, energia −1 (DENGY) e centro do feixe em posição aleatória (LASLI).
+     * um laser instalado na vista atual. Cada disparo: LASCT = 10 (pulso → 5 tiros/s) ou
+     * 0 (feixe → um tiro por ciclo do loop principal), GNTMP += 8, energia −1 (DENGY) e
+     * centro do feixe em posição aleatória (LASLI).
      * Retorna true se disparou neste passo. [seconds] é o tempo real do passo.
      */
     fun updateLaser(f: Float, seconds: Float, firing: Boolean, view: View): Boolean {
@@ -155,7 +185,9 @@ class PlayerShip {
         laserTemp = (laserTemp - f).coerceAtLeast(0f) // TT100: esfria 1 por ciclo
         val power = lasers[view.ordinal]
         if (!firing || laserCount > 0f || laserTemp >= 242f || power == 0) return false
-        laserCount = (power and 0b11111010).toFloat()
+        beamShot = power and 0x80 != 0
+        // Feixe: LASCT = 0, mas só volta a disparar no próximo ciclo do loop principal.
+        laserCount = if (beamShot) 50f * seconds / f else (power and 0b11111010).toFloat()
         laserTemp = (laserTemp + 8f).coerceAtMost(255f)
         energy = (energy - 1f).coerceAtLeast(0f)
         laserX = 128 - 4 + kotlin.random.Random.nextInt(8)
@@ -189,6 +221,10 @@ class PlayerShip {
         const val MAX_SPEED = 40f
         /** Velocidade ao sair da estação (TT110: DELTA = 12). */
         const val LAUNCH_SPEED = 12f
+
+        /** POW: laser de pulso; o de feixe é POW + 128. */
+        const val PULSE_LASER = 15
+        const val BEAM_LASER = PULSE_LASER + 128
 
         /** ALP1: magnitude do ângulo de rolagem (0..31) a partir de JSTX. */
         fun alp1(jstx: Float): Float {

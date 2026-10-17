@@ -1,6 +1,7 @@
 package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
+import com.eliteandroid.economy.Commodities
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
 import kotlin.math.abs
@@ -37,6 +38,9 @@ class Combat(private val model: FlightModel) {
     /** BAD: carga ilegal (escravos + narcóticos)·2 + armas de fogo. */
     var contraband: () -> Int = { 0 }
 
+    /** Contêiner recolhido com o item [index]; retorna false se não houver lugar no porão. */
+    var onScoop: (Int) -> Boolean = { false }
+
     // ------------------------------------------------------------ nossos mísseis
 
     /** MSAR: míssil armado procurando alvo. */
@@ -50,6 +54,13 @@ class Combat(private val model: FlightModel) {
     var ecmCycles = 0f
         private set
     val ecmActive: Boolean get() = ecmCycles > 0f
+    /** ECMP: o E.C.M. ligado é o nosso (gasta energia). */
+    var ourEcm = false
+        private set
+
+    /** Ciclos restantes do clarão da bomba de energia. */
+    var bombFlash = 0f
+        private set
 
     /** EV: atraso para novos piratas/caçadores. */
     private var extraVesselDelay = 0
@@ -59,6 +70,8 @@ class Combat(private val model: FlightModel) {
         missileArmed = false
         missileTarget = null
         ecmCycles = 0f
+        ourEcm = false
+        bombFlash = 0f
         extraVesselDelay = 0
         messages.clear()
     }
@@ -95,9 +108,42 @@ class Combat(private val model: FlightModel) {
         return true
     }
 
+    /**
+     * "E" (MA24 + ECBLB2): liga o nosso E.C.M. por 32 ciclos, se estiver instalado e não
+     * houver outro E.C.M. em andamento. Enquanto ligado, destrói todos os mísseis.
+     */
+    fun fireEcm(): Boolean {
+        if (!model.player.hasEcm || ecmActive) return false
+        ecmCycles = 32f
+        ourEcm = true
+        return true
+    }
+
+    /**
+     * TAB (MA24 + parte 5): a bomba de energia destrói todas as naves por perto, menos a
+     * estação, contando os abates. Uso único.
+     */
+    fun detonateBomb(): Boolean {
+        if (!model.player.energyBomb) return false
+        model.player.energyBomb = false
+        for (ship in model.ships.toList()) {
+            if (ship.type != ShipType.STATION && !ship.killed) kill(ship, byUs = true)
+        }
+        bombFlash = 4f
+        return true
+    }
+
     /** Uma passada de [f] ciclos: trava de míssil, E.C.M. e explosões. */
     fun step(f: Float) {
+        if (bombFlash > 0f) bombFlash = (bombFlash - f).coerceAtLeast(0f)
+        // MA16/MA69: o nosso E.C.M. gasta 1 de energia por ciclo; sem energia, desliga.
+        if (ourEcm) {
+            val p = model.player
+            p.energy = (p.energy - f).coerceAtLeast(0f)
+            if (p.energy <= 0f) ecmCycles = 0f
+        }
         if (ecmCycles > 0f) ecmCycles = (ecmCycles - f).coerceAtLeast(0f)
+        if (ecmCycles <= 0f) ourEcm = false
         // Míssil armado: trava no primeiro alvo que estiver na mira (HITCH).
         if (missileArmed && missileTarget == null) {
             model.ships.firstOrNull { !it.killed && it.type != ShipType.MISSILE && inCrosshairs(it) }
@@ -183,12 +229,27 @@ class Combat(private val model: FlightModel) {
     /**
      * MA58: uma nave a menos de 64 unidades em cada eixo bateu em nós — ela é destruída e
      * o dano é 128 + energia/2 (no escudo do lado da batida). Mísseis têm checagem própria.
+     *
+     * Parte 8: com coletores instalados, um contêiner ou cápsula de fuga que passe por baixo
+     * da nave (y < 0) é recolhido — um item aleatório 0..7 (a cápsula vira escravos); sem
+     * lugar no porão, ele se desfaz sem causar dano.
      */
     fun checkCollisions(): Boolean {
         for (ship in model.ships.toList()) {
             if (ship.killed || ship.type == ShipType.STATION || ship.type == ShipType.MISSILE) continue
             val p = ship.position
             if (abs(p.x) >= 64f || abs(p.y) >= 64f || abs(p.z) >= 64f) continue
+            val scoopable = ship.type == ShipType.CANISTER || ship.type == ShipType.ESCAPE_POD
+            if (scoopable && model.player.fuelScoops && p.y < 0f) {
+                val item = if (ship.type == ShipType.ESCAPE_POD) 3 else dornd() and 7
+                if (onScoop(item)) {
+                    model.ships.remove(ship)
+                    messages += Commodities.ALL[item].name.uppercase()
+                } else {
+                    kill(ship, byUs = false)
+                }
+                continue
+            }
             val damage = 128f + ship.energy.coerceAtLeast(0f) / 2f
             kill(ship, byUs = false)
             if (model.player.damage(damage, front = p.z >= 0f)) return true

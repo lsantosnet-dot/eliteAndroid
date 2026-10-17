@@ -8,9 +8,11 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Rectangle
 import com.eliteandroid.economy.Commander
+import com.eliteandroid.economy.Equipment
 import com.eliteandroid.economy.Market
 import com.eliteandroid.flight.FlightEvent
 import com.eliteandroid.flight.FlightModel
+import com.eliteandroid.flight.View
 import com.eliteandroid.galaxy.Galaxy
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
@@ -36,7 +38,7 @@ import com.eliteandroid.save.SaveStorage
  * ao atracar, ao sair do app atracado, ou pelo botão SAVE). Destruição: GAME OVER e o
  * último comandante salvo é recarregado (ou JAMESON em Lave, se não houver).
  */
-class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
+class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: PlanetSystem) {
 
     enum class State { DOCKED, LAUNCHING, FLYING, DOCKING, DESTROYED, HYPERSPACE }
 
@@ -49,6 +51,10 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     /** Onde o comandante é gravado (Preferences no jogo; memória nos testes). */
     var storage: SaveStorage = MemoryStorage()
 
+    /** Galáxia atual (muda com o hiperpropulsor galáctico). */
+    @Volatile var galaxy: Galaxy = homeGalaxy
+        private set
+
     /** Lidos também pela interface Android (thread de UI). */
     @Volatile var state = State.DOCKED
         private set
@@ -60,9 +66,13 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     /** Sistema escolhido para o hiperespaço (QQ9/QQ10 do original). */
     @Volatile var hyperspaceTarget: PlanetSystem? = null
 
+    /** A contagem em andamento é do hiperpropulsor galáctico. */
+    private var galacticJump = false
+
     init {
         model.combat.onBounty = { commander.earn(it.toLong()) }
         model.combat.contraband = { commander.contraband }
+        model.combat.onScoop = { commander.scoop(it) }
     }
 
     private var stateTime = 0f
@@ -90,6 +100,7 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
                 if (input.hyperspaceRequested) requestHyperspace()
                 if (input.jumpRequested && !model.inSystemJump()) flash("JUMP?")
                 handleMissileInput()
+                if (handleEquipmentInput()) return
                 when (model.update(delta, input.controls)) {
                     FlightEvent.DOCKED -> enter(State.DOCKING)
                     FlightEvent.CRASHED -> enter(State.DESTROYED)
@@ -110,6 +121,62 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         input.launchRequested = false
         input.hyperspaceRequested = false
         input.jumpRequested = false
+        input.ecmRequested = false
+        input.bombRequested = false
+        input.dockRequested = false
+        input.escapeRequested = false
+        input.galacticRequested = false
+    }
+
+    /**
+     * Equipamentos em voo: E.C.M., bomba de energia, computador de atracação, cápsula de
+     * fuga e hiperpropulsor galáctico. Retorna true se o voo terminou (atracação/fuga).
+     */
+    private fun handleEquipmentInput(): Boolean {
+        val p = model.player
+        if (input.galacticRequested) requestGalacticHyperspace()
+        if (input.ecmRequested && model.combat.fireEcm()) flash("E.C.M.")
+        if (input.bombRequested && model.combat.detonateBomb()) flash("ENERGY BOMB")
+        if (input.dockRequested && model.canUseDockingComputer()) {
+            enter(State.DOCKING) // GOIN
+            return true
+        }
+        if (input.escapeRequested && p.escapePod) {
+            escapePod()
+            return true
+        }
+        return false
+    }
+
+    /**
+     * ESCAPE: abandonamos a nave e a cápsula nos leva à estação do sistema atual. A
+     * seguradora entrega um Cobra novo com o tanque cheio, mas a carga se perde, a ficha
+     * fica limpa (FIST = 0) e a cápsula é gasta.
+     */
+    @Synchronized internal fun escapePod() {
+        val p = model.player
+        commander.loseCargo()
+        p.legalStatus = 0
+        p.escapePod = false
+        p.fuel = 70f
+        model.hyperspace.cancel()
+        galacticJump = false
+        flash("ESCAPE POD")
+        enter(State.DOCKING)
+    }
+
+    /**
+     * Ghy (CTRL-H): consome o hiperpropulsor, limpa a ficha e começa a contagem; na
+     * chegada, a galáxia seguinte (8 volta à 1) e o sistema mais perto de (96, 96).
+     */
+    internal fun requestGalacticHyperspace() {
+        val p = model.player
+        if (model.hyperspace.active || !p.galacticHyperdrive) return
+        p.galacticHyperdrive = false
+        p.legalStatus = 0
+        galacticJump = true
+        model.hyperspace.start()
+        flash("GALACTIC HYPERSPACE")
     }
 
     /**
@@ -118,6 +185,18 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
      * dos saltos, ficam para depois — eles levam a combates com Thargoids.)
      */
     @Synchronized private fun arrive() {
+        if (galacticJump) {
+            galacticJump = false
+            galaxy = GalaxyGenerator.buildGalaxy(galaxy.number % 8 + 1)
+            val target = galaxy.nearestTo(96, 96)
+            currentSystem = target
+            market = Market(target, fluct = kotlin.random.Random.nextInt(256))
+            hyperspaceTarget = null
+            model.arrive(target)
+            flash(target.name)
+            enter(State.FLYING)
+            return
+        }
         val target = hyperspaceTarget
         if (target != null) {
             val distance = GalaxyGenerator.distance(currentSystem, target)
@@ -167,6 +246,14 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         kills = model.player.kills,
         marketFluct = market.fluct,
         marketAvailability = market.availability.copyOf(),
+        lasers = model.player.lasers.copyOf(),
+        ecm = model.player.hasEcm,
+        fuelScoops = model.player.fuelScoops,
+        escapePod = model.player.escapePod,
+        energyBomb = model.player.energyBomb,
+        energyUnit = model.player.energyUnit,
+        dockingComputer = model.player.dockingComputer,
+        galacticHyperdrive = model.player.galacticHyperdrive,
     )
 
     /** Grava o comandante (só atracado, como no original). */
@@ -181,7 +268,7 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     /** Carrega o comandante salvo e põe a nave atracada no sistema dele. */
     @Synchronized fun loadSaved(): Boolean {
         val s = CommanderSave.decode(storage.read()) ?: return false
-        if (s.galaxy != galaxy.number) return false
+        if (s.galaxy != galaxy.number) galaxy = GalaxyGenerator.buildGalaxy(s.galaxy)
         val here = galaxy[s.system]
         commander.restore(s.cash, s.cargo, s.cargoCapacity)
         currentSystem = here
@@ -191,6 +278,16 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         model.player.missiles = s.missiles
         model.player.legalStatus = s.legalStatus
         model.player.kills = s.kills
+        val p = model.player
+        s.lasers.copyInto(p.lasers)
+        p.hasEcm = s.ecm
+        p.fuelScoops = s.fuelScoops
+        p.escapePod = s.escapePod
+        p.energyBomb = s.energyBomb
+        p.energyUnit = s.energyUnit
+        p.dockingComputer = s.dockingComputer
+        p.galacticHyperdrive = s.galacticHyperdrive
+        galacticJump = false
         enter(State.DOCKED)
         return true
     }
@@ -205,11 +302,13 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     /** Comandante padrão: JAMESON em Lave, 100 Cr, porão vazio, tanque cheio, 3 mísseis. */
     @Synchronized private fun resetToJameson() {
         commander.reset()
+        galaxy = homeGalaxy
+        galacticJump = false
         currentSystem = homeSystem
         market = Market(homeSystem, fluct = 0, initialAvailability = Market.JAMESON_AVAILABILITY)
         hyperspaceTarget = null
         model.player.fuel = 70f
-        model.player.missiles = 3
+        model.player.resetEquipment()
         model.player.legalStatus = 0
         model.player.kills = 0
     }
@@ -223,14 +322,17 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         if (state != State.DOCKED) Commander.TradeResult.NONE_IN_HOLD else commander.sell(market, index, units)
 
     /** Custo para encher o tanque: 2 décimos de crédito por 0.1 LY (EQSHP: 14.0 Cr cheio). */
-    val refuelCost: Long get() = ((70f - model.player.fuel).toLong().coerceAtLeast(0)) * 2
+    val refuelCost: Long get() = Equipment.price(Equipment.FUEL, model.player)
 
-    @Synchronized fun refuel(): Boolean {
-        if (state != State.DOCKED || refuelCost == 0L) return false
-        if (!commander.spend(refuelCost)) return false
-        model.player.fuel = 70f
-        return true
-    }
+    @Synchronized fun refuel(): Boolean = buyEquipment(Equipment.FUEL) == Equipment.Result.OK
+
+    /** Itens da loja neste sistema (QQ25). */
+    val equipmentForSale: List<Equipment> get() = Equipment.available(currentSystem.techLevel)
+
+    /** EQSHP: compra [item] (lasers vão na vista [view]). Só atracado. */
+    @Synchronized fun buyEquipment(item: Equipment, view: View = View.FRONT): Equipment.Result =
+        if (state != State.DOCKED) Equipment.Result.NOT_AVAILABLE
+        else Equipment.buy(item, currentSystem.techLevel, model.player, commander, view)
 
     /**
      * hyp: só em voo, sem contagem em andamento, com um destino diferente do sistema atual
@@ -259,6 +361,12 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     }
 
     private fun enter(s: State) {
+        // Atracar ou morrer durante a contagem galáctica a interrompe: o hiperpropulsor
+        // volta para o porão (a ficha limpa fica).
+        if (galacticJump && (s == State.DOCKING || s == State.DESTROYED)) {
+            galacticJump = false
+            model.player.galacticHyperdrive = true
+        }
         state = s
         stateTime = 0f
     }
@@ -299,6 +407,7 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
             State.FLYING -> {
                 drawSight(w, h, lines)
                 if (model.player.laserBeamVisible) drawLaser(view, w, h, lines)
+                if (model.combat.bombFlash > 0f) drawBombFlash(w, h, lines)
             }
             else -> Unit
         }
@@ -324,6 +433,14 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         val p = model.player
         val tx = sx(p.laserX); val ty = sy(p.laserY)
         for (x in intArrayOf(32, 224, 48, 208)) lines.segment(sx(x), sy(191), tx, ty, NeonPalette.LASER)
+    }
+
+    /** BOMB: a tela pisca em listras brancas enquanto a bomba de energia age. */
+    private fun drawBombFlash(w: Float, h: Float, lines: NeonLineBatch) {
+        val step = h / 24f
+        val offset = if ((model.combat.bombFlash * 4f).toInt() % 2 == 0) 0f else step / 2f
+        var y = dashboard.bounds.y + dashboard.bounds.height + offset // só a vista do espaço
+        while (y < h) { lines.segment(0f, y, w, y, NeonPalette.FLASH); y += step }
     }
 
     private fun drawText(view: SpaceView, batch: SpriteBatch, font: BitmapFont) {
