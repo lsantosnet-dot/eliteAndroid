@@ -52,6 +52,11 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     /** Sistema escolhido para o hiperespaço (QQ9/QQ10 do original). */
     @Volatile var hyperspaceTarget: PlanetSystem? = null
 
+    init {
+        model.combat.onBounty = { commander.earn(it.toLong()) }
+        model.combat.contraband = { commander.contraband }
+    }
+
     private var stateTime = 0f
     private var message: String? = null
     private var messageTime = 0f
@@ -68,12 +73,15 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         when (state) {
             State.DOCKED -> if (input.launchRequested) enter(State.LAUNCHING)
             State.LAUNCHING -> if (stateTime >= LaunchTunnel.DURATION) {
+                // TT110: sair com carga ilegal piora o status legal.
+                model.player.legalStatus = model.player.legalStatus or commander.contraband
                 model.launch(currentSystem)
                 enter(State.FLYING)
             }
             State.FLYING -> {
                 if (input.hyperspaceRequested) requestHyperspace()
                 if (input.jumpRequested && !model.inSystemJump()) flash("JUMP?")
+                handleMissileInput()
                 when (model.update(delta, input.controls)) {
                     FlightEvent.DOCKED -> enter(State.DOCKING)
                     FlightEvent.CRASHED -> enter(State.DESTROYED)
@@ -82,6 +90,7 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
                     FlightEvent.STATION_APPEARED -> flash("SPACE STATION")
                     FlightEvent.NONE -> Unit
                 }
+                if (messageTime <= 0f) model.combat.messages.removeFirstOrNull()?.let { flash(it) }
             }
             State.DOCKING -> if (stateTime >= LaunchTunnel.DURATION) enter(State.DOCKED)
             State.DESTROYED -> if (stateTime >= 3f) restartCommander()
@@ -111,6 +120,20 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         enter(State.FLYING)
     }
 
+    /** T/M/U no teclado; no toque, um botão só: arma → (trava) → dispara, ou desarma. */
+    private fun handleMissileInput() {
+        val c = model.combat
+        if (input.missileArm) c.armMissile()
+        if (input.missileUnarm) c.unarmMissile()
+        if (input.missileFire && !c.fireMissile() && c.missileArmed) flash("NO TARGET")
+        if (input.missileSmart) when {
+            c.missileTarget != null -> c.fireMissile()
+            c.missileArmed -> c.unarmMissile()
+            model.player.missiles > 0 -> c.armMissile()
+            else -> flash("NO MISSILES")
+        }
+    }
+
     /** Morte: volta o comandante padrão (JAMESON em Lave, 100 Cr, porão vazio, tanque cheio). */
     @Synchronized private fun restartCommander() {
         commander.reset()
@@ -119,6 +142,8 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         hyperspaceTarget = null
         model.player.fuel = 70f
         model.player.missiles = 3
+        model.player.legalStatus = 0
+        model.player.kills = 0
         enter(State.DOCKED)
     }
 

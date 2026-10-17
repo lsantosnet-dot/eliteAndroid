@@ -34,6 +34,7 @@ fun main(args: Array<String>) {
         fire = "--fire" in args,
         arrive = args.valueAfter("--arrive"),
         jumps = args.valueAfter("--jumps")?.toInt() ?: 0,
+        combat = "--combat" in args,
     )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
@@ -45,6 +46,19 @@ fun main(args: Array<String>) {
     Lwjgl3Application(if (shotPath != null) ScreenshotWrapper(game, shotPath, shot) else game, config)
 }
 
+/** Cena de combate para capturas: piratas à frente, um explodindo e um míssil nosso a caminho. */
+private fun stageCombat(m: com.eliteandroid.flight.FlightModel) {
+    fun ship(t: com.eliteandroid.ships.ShipType, x: Float, y: Float, z: Float, ai: Int) =
+        com.eliteandroid.ships.ShipInstance(t, com.badlogic.gdx.math.Vector3(x, y, z)).also { it.aiFlag = ai; m.addShip(it) }
+    ship(com.eliteandroid.ships.ShipType.MAMBA, -260f, 90f, 1300f, 0xFE).also { it.laserFlash = 1000f } // laser aceso na foto
+    ship(com.eliteandroid.ships.ShipType.SIDEWINDER, 420f, -40f, 1700f, 0xC0).setOrientation(com.badlogic.gdx.math.Vector3(-1f, 0f, -0.3f))
+    val python = ship(com.eliteandroid.ships.ShipType.PYTHON, 80f, 200f, 3200f, 0xC0)
+    python.setOrientation(com.badlogic.gdx.math.Vector3(0.3f, -0.2f, 1f))
+    m.combat.kill(ship(com.eliteandroid.ships.ShipType.SIDEWINDER, -700f, -150f, 2200f, 0xC0), byUs = true)
+    m.ships.last().cloudCounter = 70f
+    m.combat.armMissile()
+}
+
 private fun Array<String>.valueAfter(flag: String): String? = indexOf(flag).takeIf { it >= 0 }?.let { getOrNull(it + 1) }
 
 private class ShotSpec(
@@ -52,6 +66,7 @@ private class ShotSpec(
     val fire: Boolean,
     val arrive: String?,
     val jumps: Int,
+    val combat: Boolean,
 )
 
 /** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
@@ -68,6 +83,7 @@ private class ScreenshotWrapper(
             val target = shot.arrive?.let { session.galaxy.findByName(it) }
             if (target != null) session.arriveNow(target) else session.launchNow()
             repeat(shot.jumps) { session.model.inSystemJump() }
+            if (shot.combat) stageCombat(session.model)
             val controls = FlightControls().apply { stickX = shot.roll; stickY = shot.pitch; targetSpeed = shot.speed }
             var t = 0f
             while (t < shot.time) { session.model.update(1f / 60f, controls); t += 1f / 60f }

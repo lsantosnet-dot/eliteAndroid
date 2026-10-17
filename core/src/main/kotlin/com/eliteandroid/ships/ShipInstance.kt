@@ -8,16 +8,52 @@ fun <T : SpaceObject> T.orient(nose: Vector3, up: Vector3 = Vector3.Y): T {
     return this
 }
 
-/** Uma nave: um [SpaceObject] com modelo 3D e cor. */
+/**
+ * Uma nave: um [SpaceObject] com modelo 3D, cor e o estado de combate do bloco INWK:
+ * energia (#35), mísseis e estado de explosão (#31), aceleração (#28) e o byte de IA (#32:
+ * bit 7 = IA ligada, bits 1-6 = agressividade, bit 0 = E.C.M.; nos mísseis, bit 6 = hostil
+ * a nós e bits 1-5 = alvo).
+ */
 class ShipInstance(
     val blueprint: ShipBlueprint,
     position: Vector3 = Vector3(),
     /** Cor ARGB empacotada usada pelo renderizador neon (ver [com.eliteandroid.render.NeonPalette]). */
     var color: Float,
+    val type: ShipType = ShipType.entries.first { it.blueprint === blueprint },
 ) : SpaceObject(position) {
+
+    constructor(type: ShipType, position: Vector3) : this(type.blueprint, position, type.color, type)
 
     /** Estação hostil (AI byte #32 com bit 7) — atracar nela é fatal. */
     var hostile = false
+
+    /** Posição na bolha local (escalona o TACTICS: cada nave a cada 8 ciclos). */
+    var slot = 0
+
+    var energy = blueprint.maxEnergy.toFloat()
+    var missiles = blueprint.missiles
+    var acceleration = 0f
+    var aiFlag = 0
+
+    /** Míssil: alvo (null = nós, se [aiFlag] tiver o bit 6). */
+    var missileTarget: ShipInstance? = null
+
+    /**
+     * Bit 6 do #31: disparando o laser contra nós. No original o bit fica ligado até o
+     * próximo desenho; aqui o feixe fica aceso por um ciclo do loop principal.
+     */
+    var laserFlash = 0f
+    var firingLaser: Boolean
+        get() = laserFlash > 0f
+        set(v) { laserFlash = if (v) 1f else 0f }
+
+    /** Bit 7 do #31: destruída; a nuvem da explosão (DOEXP) cresce de 18 até 256. */
+    var killed = false
+    var cloudCounter = 0f
+
+    val hasAi: Boolean get() = aiFlag and 0x80 != 0
+    val hasEcm: Boolean get() = aiFlag and 1 != 0
+    val isHostileMissile: Boolean get() = type == ShipType.MISSILE && aiFlag and 0x40 != 0
 }
 
 /**

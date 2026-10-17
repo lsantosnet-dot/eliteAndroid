@@ -107,6 +107,14 @@ class WireframeProjector {
         return true
     }
 
+    /** Posição na tela do vértice [v] de [ship] na vista atual; false se estiver atrás. */
+    fun projectVertex(ship: ShipInstance, v: Int, out: Vector3): Boolean {
+        val bp = ship.blueprint
+        ship.toWorld(bp.vertices[v * 3], bp.vertices[v * 3 + 1], bp.vertices[v * 3 + 2], tmp)
+        view.toView(tmp.x, tmp.y, tmp.z, tmp)
+        return projectPoint(tmp.x, tmp.y, tmp.z, out)
+    }
+
     /** SHPPT: nave distante desenhada como um ponto. */
     private fun drawDot(p: Vector3, color: Float, sink: SegmentSink): Int {
         val sx = viewportWidth * 0.5f + p.x / p.z * focal

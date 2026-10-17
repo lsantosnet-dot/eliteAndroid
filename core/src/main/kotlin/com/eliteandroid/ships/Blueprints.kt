@@ -10,6 +10,7 @@ object Blueprints {
     /** Estação espacial Coriolis: cuboctaedro de 14 faces com a fenda de atracação na face 0 (frente). */
     val CORIOLIS: ShipBlueprint = ShipBlueprint.define("Coriolis Station") {
         visibilityDistance = 120
+        stats(energy = 240, speed = 0, laserByte = 6, bounty = 0, canisters = 0, gunVertex = 0, explosionVertices = 12)
         targetableArea = 160 * 160
         vertex(160, 0, 160)      // 0
         vertex(0, 160, 160)      // 1
@@ -61,6 +62,7 @@ object Blueprints {
     /** Cobra Mk III: a nave do jogador. */
     val COBRA_MK3: ShipBlueprint = ShipBlueprint.define("Cobra Mk III") {
         visibilityDistance = 50
+        stats(energy = 150, speed = 28, laserByte = 19, bounty = 0, canisters = 3, gunVertex = 21, explosionVertices = 9)
         targetableArea = 95 * 95
         vertex(32, 0, 76)        // 0
         vertex(-32, 0, 76)       // 1

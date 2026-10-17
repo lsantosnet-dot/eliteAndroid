@@ -46,6 +46,11 @@ class PlayerShip {
     /** ECM instalado (bulbo "E" do painel). */
     var hasEcm = false
 
+    /** FIST: status legal (0 = limpo, 1..49 = infrator, 50+ = fugitivo). */
+    var legalStatus = 0
+    /** TALLY: naves abatidas (define a classificação de combate). */
+    var kills = 0
+
     /**
      * LASER: potência por vista (frente, trás, esquerda, direita). O Cobra sai de fábrica
      * com um laser de pulso (potência 15) só na frente.

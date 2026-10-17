@@ -21,4 +21,6 @@ class TouchControls {
     @Volatile var launchRequest = false
     @Volatile var hyperspaceRequest = false
     @Volatile var jumpRequest = false
+    /** Botão MISSILE: arma; com alvo travado, dispara; armado sem alvo, desarma. */
+    @Volatile var missileRequest = false
 }

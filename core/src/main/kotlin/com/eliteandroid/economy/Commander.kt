@@ -51,6 +51,14 @@ class Commander {
         return TradeResult.OK
     }
 
+    /** Recebe [tenths] décimos de crédito (recompensas). */
+    @Synchronized fun earn(tenths: Long) {
+        cash += tenths
+    }
+
+    /** BAD: (escravos + narcóticos)·2 + armas de fogo, em toneladas. */
+    val contraband: Int get() = (cargo[3] + cargo[6]) * 2 + cargo[10]
+
     /** Gasta [tenths] décimos de crédito, se houver. */
     @Synchronized fun spend(tenths: Long): Boolean {
         if (tenths > cash) return false
@@ -62,5 +70,25 @@ class Commander {
         const val START_CASH = 1000L // 100.0 Cr
 
         fun formatCredits(tenths: Long): String = "%d.%d Cr".format(tenths / 10, tenths % 10)
+
+        /** Classificação de combate pelo número de abates (TALLY). */
+        fun rating(kills: Int): String = when {
+            kills < 8 -> "Harmless"
+            kills < 16 -> "Mostly Harmless"
+            kills < 32 -> "Poor"
+            kills < 64 -> "Average"
+            kills < 128 -> "Above Average"
+            kills < 512 -> "Competent"
+            kills < 2560 -> "Dangerous"
+            kills < 6400 -> "Deadly"
+            else -> "---- E L I T E ----"
+        }
+
+        /** Status legal pelo FIST. */
+        fun legal(fist: Int): String = when {
+            fist == 0 -> "Clean"
+            fist < 50 -> "Offender"
+            else -> "Fugitive"
+        }
     }
 }

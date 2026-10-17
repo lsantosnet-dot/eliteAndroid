@@ -31,7 +31,22 @@ class ShipBlueprint private constructor(
     val visibilityDistance: Int,
     /** Bytes #1-2 ("targetable area"): o laser acerta se x² + y² < este valor (HITCH). */
     val targetableArea: Int,
+    /** Atributos do bloco do modelo: energia (#14), velocidade (#15), recompensa (#10-11, em décimos de Cr). */
+    val maxEnergy: Int,
+    val maxSpeed: Int,
+    val bounty: Int,
+    /** Byte #19: potência do laser nos bits 3-7 e mísseis nos bits 0-2. */
+    val laserByte: Int,
+    /** Byte #0: máximo de contêineres de carga soltos ao ser destruída. */
+    val maxCanisters: Int,
+    /** Byte #6/4: vértice de onde sai o laser. */
+    val gunVertex: Int,
+    /** (Byte #7 − 6)/4: quantos vértices geram nuvens na explosão. */
+    val explosionVertices: Int,
 ) {
+    val laserPower: Int get() = laserByte ushr 3
+    val missiles: Int get() = laserByte and 7
+
     val vertexCount: Int get() = vertices.size / 3
     val edgeCount: Int get() = edges.size / 4
 
@@ -116,6 +131,14 @@ class ShipBlueprint private constructor(
         /** Bytes #1-2 do bloco do modelo ("Targetable area"). */
         var targetableArea = 0
 
+        private var energy = 0; private var speed = 0; private var laserByte = 0
+        private var bounty = 0; private var canisters = 0; private var gunVertex = 0; private var explosion = 4
+
+        fun stats(energy: Int, speed: Int, laserByte: Int, bounty: Int, canisters: Int, gunVertex: Int, explosionVertices: Int) {
+            this.energy = energy; this.speed = speed; this.laserByte = laserByte; this.bounty = bounty
+            this.canisters = canisters; this.gunVertex = gunVertex; this.explosion = explosionVertices
+        }
+
         fun vertex(x: Int, y: Int, z: Int) {
             verts += x.toFloat(); verts += y.toFloat(); verts += z.toFloat()
         }
@@ -135,6 +158,7 @@ class ShipBlueprint private constructor(
             ShipBlueprint(
                 name, verts.toFloatArray(), edgeData.toIntArray(), edgeVis.toIntArray(),
                 edgeDet.toBooleanArray(), faces, visibilityDistance, targetableArea,
+                energy, speed, bounty, laserByte, canisters, gunVertex, explosion,
             )
     }
 

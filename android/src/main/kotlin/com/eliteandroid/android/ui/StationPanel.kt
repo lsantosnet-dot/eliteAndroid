@@ -188,8 +188,8 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
             appendLine("Condition         : Docked")
             appendLine(String.format(Locale.US, "Fuel              : %.1f Light Years", fuel / 10f))
             appendLine("Cash              : ${Commander.formatCredits(cmdr.cash)}")
-            appendLine("Legal Status      : Clean")
-            appendLine("Rating            : Harmless")
+            appendLine("Legal Status      : ${Commander.legal(sess.model.player.legalStatus)}")
+            appendLine("Rating            : ${Commander.rating(sess.model.player.kills)}")
             appendLine()
             appendLine("EQUIPMENT: Front Pulse Laser, ${sess.model.player.missiles} Missiles")
             val hold = Commodities.ALL.filter { cmdr.cargo[it.index] > 0 }

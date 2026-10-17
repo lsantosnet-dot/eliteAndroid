@@ -69,7 +69,7 @@ class Dashboard {
         bar(lines, LEFT_BAR_X, 3, (p.cabinTemp / 16f), lowIsDanger = false, threshold = 11, flash = flash)
         bar(lines, LEFT_BAR_X, 4, (p.laserTemp / 16f), lowIsDanger = false, threshold = 11, flash = flash)
         bar(lines, LEFT_BAR_X, 5, (p.altitude / 16f), lowIsDanger = false, threshold = 99, flash = flash)
-        drawMissiles(lines, p)
+        drawMissiles(lines, model)
 
         // Lado direito: SP RL DC e bancos de energia 1..4.
         bar(lines, RIGHT_BAR_X, 0, (p.speed / 2f), lowIsDanger = false, threshold = 14, flash = flash)
@@ -81,6 +81,7 @@ class Dashboard {
 
         // Bulbos: S (estação por perto, SPBLB) e E (E.C.M. ativo, ECBLB).
         if (model.station != null) bulb(lines, BULB_S_X, PANEL_COLOR)
+        if (model.combat.ecmActive) bulb(lines, BULB_E_X, PANEL_COLOR)
     }
 
     private fun drawFrame(lines: NeonLineBatch) {
@@ -112,11 +113,22 @@ class Dashboard {
         seg(lines, RIGHT_BAR_X + 16f, y - 3.4f, RIGHT_BAR_X + 16f, y - 2.6f, FRAME_COLOR) // marca central
     }
 
-    private fun drawMissiles(lines: NeonLineBatch, p: PlayerShip) {
+    /**
+     * MSBAR: um bloco por míssil; o da direita (o próximo a ser lançado) fica amarelo quando
+     * armado procurando alvo e vermelho quando travado.
+     */
+    private fun drawMissiles(lines: NeonLineBatch, model: FlightModel) {
+        val p = model.player
         val y = rowY(6) + 1.5f
+        val c = model.combat
+        val activeColor = when {
+            c.missileTarget != null -> DANGER_COLOR
+            c.missileArmed -> PANEL_COLOR
+            else -> MISSILE_COLOR
+        }
         for (i in 0 until 4) {
             val x = LEFT_BAR_X + 2f + i * 8f
-            if (i < p.missiles) seg(lines, x, y, x + 3f, y, MISSILE_COLOR, hw = 1.6f)
+            if (i < p.missiles) seg(lines, x, y, x + 3f, y, if (i == p.missiles - 1) activeColor else MISSILE_COLOR, hw = 1.6f)
             else seg(lines, x, y, x + 3f, y, FRAME_COLOR, hw = 0.4f)
         }
     }

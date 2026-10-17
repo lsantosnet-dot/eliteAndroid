@@ -6,6 +6,7 @@ import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.Stardust
 import com.eliteandroid.ships.Blueprints
 import com.eliteandroid.ships.ShipInstance
+import com.eliteandroid.ships.ShipType
 import com.eliteandroid.ships.SpaceObject
 import com.eliteandroid.ships.orient
 import kotlin.math.abs
@@ -60,6 +61,12 @@ class FlightModel {
 
     private var accumulator = 0f
 
+    /** Combate, tráfego e mísseis. */
+    val combat = Combat(this)
+
+    /** Morte causada pelo combate (laser ou míssil inimigo) neste passo. */
+    var playerDestroyed = false
+
     /** Contagem regressiva do hiperespaço (QQ22). */
     val hyperspace = HyperspaceCountdown()
 
@@ -69,12 +76,15 @@ class FlightModel {
      */
     fun launch(system: PlanetSystem? = null) {
         ships.clear()
+        combat.reset()
+        system?.let { combat.government = it.governmentCode }
+        playerDestroyed = false
         sun = null
         planet = Planet(Vector3(0f, 0f, 65536f), hasCrater = system?.let { (it.techLevel and 2) != 0 } ?: false)
         val st = ShipInstance(Blueprints.CORIOLIS, Vector3(0f, 0f, -256f), NeonPalette.STATION)
             .orient(Vector3(0f, 0f, 1f)) // ZINF + NwS1 (nosev invertido) + TIDY
         st.rollCounter = -127f // NWSPS: contador 255 = rolagem anti-horária máxima, sem amortecimento
-        ships += st
+        addShip(st)
         station = st
         player.reset()
         hyperspace.cancel()
@@ -93,6 +103,10 @@ class FlightModel {
     fun arrive(system: PlanetSystem) {
         ships.clear()
         station = null
+        combat.reset()
+        combat.government = system.governmentCode
+        playerDestroyed = false
+        player.legalStatus = player.legalStatus ushr 1 // SOLAR: LSR FIST
         val seed = system.seed
         val a = (seed.s0Hi and 7) + 6
         val zSign = a ushr 1
@@ -116,7 +130,9 @@ class FlightModel {
      * a menos de 2 unidades de sign (131072) em todos os eixos.
      */
     fun inSystemJump(): Boolean {
-        if (station != null || ships.isNotEmpty()) return false
+        // Asteroides, contêineres e cápsulas não impedem o salto; qualquer outra nave, sim.
+        val junk = setOf(ShipType.ASTEROID, ShipType.CANISTER, ShipType.ESCAPE_POD)
+        if (station != null || ships.any { !it.killed && it.type !in junk }) return false
         for (body in listOfNotNull(planet, sun)) {
             val p = body.position
             if (p.z >= 0f && maxSign(p) < 2) return false
@@ -146,7 +162,7 @@ class FlightModel {
             f, controls.rollKey, controls.pitchKey, controls.stickX, controls.stickY,
             controls.accelerate, controls.decelerate, controls.targetSpeed,
         )
-        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) checkLaserHits()
+        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) combat.laserShot(player.lasers[view.ordinal] and 0x7F)
         val alpha = player.alpha * f
         val beta = player.beta * f
         val distance = player.speed * f
@@ -168,7 +184,16 @@ class FlightModel {
                 0 -> if (spawnStation()) event = FlightEvent.STATION_APPEARED
                 10 -> if (!checkAltitude()) return FlightEvent.CRASHED
             }
+            if (tick % 256 == 0) combat.spawnCheck()
+            // MVEIT parte 2: TACTICS a cada 8 ciclos por nave (escalonado pelo slot); mísseis sempre.
+            for (ship in ships.toList()) {
+                if (ship.hasAi && (ship.type == ShipType.MISSILE || ((tick xor ship.slot) and 7) == 0)) combat.tactics(ship)
+            }
         }
+        combat.step(f)
+        // Naves que se afastam demais saem da bolha local.
+        ships.removeAll { it !== station && maxSign(it.position) >= 1 }
+        if (combat.checkCollisions() || playerDestroyed) return FlightEvent.CRASHED
         if (hyperspace.update(f)) return FlightEvent.HYPERSPACE
 
         val docking = checkDocking(f)
@@ -189,7 +214,7 @@ class FlightModel {
         val st = ShipInstance(Blueprints.CORIOLIS, spot, NeonPalette.STATION)
         st.nosev.set(pl.nosev).scl(-1f); st.roofv.set(pl.roofv); st.orthonormalize()
         st.rollCounter = -127f
-        ships += st
+        addShip(st)
         station = st
         sun = null
         return true
@@ -212,22 +237,13 @@ class FlightModel {
         return player.altitude >= 1f
     }
 
+    fun addShip(ship: ShipInstance) {
+        ship.slot = combat.nextSlot()
+        ships += ship
+    }
+
     /** Bússola: a estação, se existir (zona segura), senão o planeta. */
     val compassTarget: SpaceObject? get() = station ?: planet
-
-    /**
-     * HITCH: uma nave está na mira se estiver à frente, com |x| e |y| < 256 e
-     * x² + y² menor que a "targetable area" do modelo. Acertar a estação a deixa hostil
-     * (MA14); ela não pode ser destruída.
-     */
-    private fun checkLaserHits() {
-        for (ship in ships) {
-            val p = ship.position
-            if (p.z <= 0f || abs(p.x) >= 256f || abs(p.y) >= 256f) continue
-            if (p.x * p.x + p.y * p.y >= ship.blueprint.targetableArea) continue
-            if (ship === station) ship.hostile = true
-        }
-    }
 
     /**
      * Loop principal partes 7 e 9: com a estação a menos de 128 unidades em cada eixo,

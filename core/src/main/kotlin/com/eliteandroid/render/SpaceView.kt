@@ -32,6 +32,7 @@ class SpaceView : Disposable {
 
     val projector = WireframeProjector()
     private val celestial = CelestialRenderer()
+    private val combat = CombatRenderer()
     val lines = NeonLineBatch()
     private val bloom = BloomRenderer()
     val sprites = SpriteBatch()
@@ -68,7 +69,11 @@ class SpaceView : Disposable {
         dust?.draw(projector, lines)
         model?.sun?.let { celestial.drawSun(it, projector, lines, NeonPalette.SUN) }
         model?.planet?.let { celestial.drawPlanet(it, projector, lines, NeonPalette.PLANET) }
-        for (ship in ships) projector.project(ship, lines)
+        for (ship in ships) {
+            if (ship.killed) { combat.drawExplosion(ship, projector, lines); continue }
+            projector.project(ship, lines)
+            if (ship.firingLaser) combat.drawEnemyLaser(ship, projector, lines, NeonPalette.LASER)
+        }
         hud.worldLines(lines)
         lines.end()
 

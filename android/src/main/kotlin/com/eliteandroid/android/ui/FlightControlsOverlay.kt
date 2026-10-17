@@ -14,7 +14,7 @@ import com.eliteandroid.flight.View as SpaceDirection
  * Interface touch de voo (Views Android sobre a superfície LibGDX):
  *
  *  - manche flutuante na esquerda (rolagem/arfagem);
- *  - acelerador vertical na borda direita, FIRE (segurar), HYPER e JUMP acima dele;
+ *  - acelerador vertical na borda direita, FIRE (segurar), MISSILE, HYPER e JUMP;
  *  - câmeras F/R/L/D no canto superior direito.
  * (Atracado, quem aparece é o [StationPanel].)
  *
@@ -48,6 +48,12 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         onClick = { touch?.hyperspaceRequest = true },
     )
 
+    /** Míssil: 1º toque arma (procura alvo na mira), com alvo travado dispara; armado sem alvo, desarma. */
+    private val missile = NeonButton(
+        context, "MSL 3", NeonStyle.YELLOW, round = true, textSizeDp = 12f,
+        onClick = { touch?.missileRequest = true },
+    )
+
     /** WARP ("J"): salto dentro do sistema em direção ao planeta. */
     private val jump = NeonButton(
         context, "JUMP", NeonStyle.CYAN, round = false, textSizeDp = 12f,
@@ -59,7 +65,7 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
             onClick = { touch?.viewRequest = dir })
     }
 
-    private val flightControls = listOf<View>(joystick, throttle, fire, hyper, jump)
+    private val flightControls = listOf<View>(joystick, throttle, fire, missile, hyper, jump)
     private val viewRow = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         viewButtons.forEach { addView(it, LinearLayout.LayoutParams(dp(52f), dp(52f))) }
@@ -82,11 +88,15 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         addView(fire, LayoutParams(dp(104f), dp(104f), Gravity.END or Gravity.BOTTOM).apply {
             marginEnd = dp(76f); bottomMargin = dp(14f)
         })
-        addView(hyper, LayoutParams(dp(92f), dp(48f), Gravity.END or Gravity.BOTTOM).apply {
-            marginEnd = dp(82f); bottomMargin = dp(128f)
+        // Coluna da direita, de baixo para cima: FIRE, MISSILE, HYPER, JUMP.
+        addView(missile, LayoutParams(dp(80f), dp(80f), Gravity.END or Gravity.BOTTOM).apply {
+            marginEnd = dp(88f); bottomMargin = dp(122f)
         })
-        addView(jump, LayoutParams(dp(92f), dp(48f), Gravity.END or Gravity.BOTTOM).apply {
-            marginEnd = dp(82f); bottomMargin = dp(182f)
+        addView(hyper, LayoutParams(dp(92f), dp(46f), Gravity.END or Gravity.BOTTOM).apply {
+            marginEnd = dp(82f); bottomMargin = dp(206f)
+        })
+        addView(jump, LayoutParams(dp(92f), dp(46f), Gravity.END or Gravity.BOTTOM).apply {
+            marginEnd = dp(82f); bottomMargin = dp(256f)
         })
         addView(viewRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.TOP).apply {
             topMargin = dp(6f); marginEnd = dp(6f)
@@ -134,6 +144,15 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         val model = session.model
         throttle.speed = model.player.speed
         viewButtons.forEachIndexed { i, b -> b.lit = model.view.ordinal == i }
+        val c = model.combat
+        missile.label = when {
+            c.missileTarget != null -> "LOCK"
+            c.missileArmed -> "ARM"
+            else -> "MSL ${model.player.missiles}"
+        }
+        missile.color = if (c.missileTarget != null) NeonStyle.RED else NeonStyle.YELLOW
+        missile.lit = c.missileArmed || c.missileTarget != null
+        missile.invalidate()
         val countdown = model.hyperspace.shown
         hyper.lit = countdown > 0
         hyper.label = if (countdown > 0) "HYP $countdown" else "HYPER"
