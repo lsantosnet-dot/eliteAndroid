@@ -19,7 +19,7 @@ enum class Equipment(val label: String, val price: Long) {
     ESCAPE_POD("Escape Pod", 10000),
     ENERGY_BOMB("Energy Bomb", 9000),
     ENERGY_UNIT("Energy Unit", 15000),
-    DOCKING_COMPUTER("Docking Computers", 10000),
+    DOCKING_COMPUTER("Docking Computers", 10), // 1000 Cr no original; 1 Cr aqui, a pedido
     GALACTIC_HYPERDRIVE("Galactic Hyperspace", 50000),
     MILITARY_LASER("Military Lasers", 60000),
     MINING_LASER("Mining Lasers", 8000);

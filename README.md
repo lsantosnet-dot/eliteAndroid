@@ -384,7 +384,7 @@ preços da tabela PRXS.
 | Escape Pod | 1000 Cr | **ESC** / EJECT: volta à estação com um Cobra novo e tanque cheio, perdendo a carga; a ficha fica limpa |
 | Energy Bomb | 900 Cr | **TAB** / BOMB: destrói todas as naves por perto, menos a estação (uso único) |
 | Energy Unit | 1500 Cr | recarga de energia em dobro |
-| Docking Computers | 1000 Cr | **C** / DOCK: atracação imediata na zona segura (estação não hostil) |
+| Docking Computers | 1 Cr (1000 Cr no original) | **C** / DOCK: atracação imediata na zona segura (estação não hostil) |
 | Galactic Hyperspace | 5000 Cr | **CTRL-H** / G-HYP: salto para a galáxia seguinte (8 → 1), chegando ao sistema mais perto de (96, 96); limpa a ficha (uso único) |
 | Military Lasers | 6000 Cr | como o de feixe, com potência 23 — o único que fere o Constrictor |
 | Mining Lasers | 800 Cr | pulsos lentos de potência 50; asteroides destruídos por ele se partem em fragmentos |

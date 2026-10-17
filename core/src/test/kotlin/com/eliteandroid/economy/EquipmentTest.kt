@@ -22,7 +22,7 @@ class EquipmentTest {
     @Test
     fun `PRXS prices and the order of the original`() {
         assertEquals(
-            listOf(2L, 300L, 4000L, 6000L, 4000L, 10000L, 5250L, 10000L, 9000L, 15000L, 10000L, 50000L, 60000L, 8000L),
+            listOf(2L, 300L, 4000L, 6000L, 4000L, 10000L, 5250L, 10000L, 9000L, 15000L, 10L, 50000L, 60000L, 8000L),
             Equipment.entries.map { it.price },
         )
     }
