@@ -294,15 +294,46 @@ extraídos dos 16 arquivos de naves `elite-ships-a..p.asm` por
   cápsulas viram **Slaves** e Thargons viram **Alien Items** (byte #0 do modelo).
 
 A **Moray** está nos arquivos de naves, mas — como no original — nenhuma rotina de
-surgimento chega ao tipo 28, então ela nunca aparece. Ficaram de fora as missões da
-versão em disco (a Constrictor e os planos dos Thargoids).
+surgimento chega ao tipo 28, então ela nunca aparece.
+
+## Missões
+
+![Briefing da missão 1](docs/missao.png)
+
+As duas missões da versão em disco, com o byte TP do original (DOENTRY decide, a cada
+atracação, se uma missão começa, avança ou termina). As mensagens aparecem como
+"INCOMING MESSAGE" — no briefing da missão 1, o Constrictor gira acima do texto.
+
+**Missão 1 — o Constrictor roubado**
+- Começa ao atracar com **256 abates** ou mais, nas galáxias 1 ou 2. O capitão da marinha
+  (Curruthers, Fosdyke Smythe…) conta que o protótipo foi roubado do estaleiro de Xeer.
+- Pistas: com a missão em andamento, o "Data on System" de vários sistemas troca a
+  descrição do planeta por um recado (Xeer → Reesdice → Arexe; na galáxia 2, Errius →
+  Inbibe → Ausar → Usleri → Orarra…), com as palavras sorteadas do original.
+- O Constrictor está na **galáxia 2, no sistema em (144, 33)** (lá o jogo carrega o
+  arquivo de naves G, o único com ele): ele surge no lugar de um caçador solitário, com
+  E.C.M. e agressividade 60. **Só o laser militar** o fere, e com um quarto da potência.
+- Destruído, ao atracar: **5000 Cr** e 256 abates de bônus.
+
+**Missão 2 — os planos dos Thargoids**
+- Com a missão 1 cumprida e **1280 abates**, na galáxia 3: a marinha pede que você vá a
+  **Ceerdi**, onde o Agente Blake entrega os planos das Hive Worlds.
+- Carregando os planos: os arquivos de naves passam a ser os com Thargoids (C ou D) e
+  cada rodada de surgimento tem 22% de chance de um Thargoid.
+- Entregue-os em **Birera**: a recompensa é a **unidade de energia da marinha** (recarga
+  tripla) e 256 abates de bônus.
+
+Também da versão em disco: a cada 256 abates, "RIGHT ON COMMANDER!"; abates a laser soltam
+placas de liga e contêineres; e o **laser de mineração** parte asteroides em fragmentos.
+O estado das missões vai no jogo salvo (versão 3).
 
 ## Loja de equipamentos
 
 ![Laser de feixe](docs/feixe.png)
 
-A aba **EQUIP** é o "Equip Ship" (EQSHP) do original: os itens à venda dependem do tech
-level do sistema (os primeiros `tek + 3`, até 12), com os preços da tabela PRXS.
+A aba **EQUIP** é o "Equip Ship" (EQSHP) da versão em disco: os itens à venda dependem
+do tech level do sistema (os primeiros `tek + 3`; a partir de 12, todos os 14), com os
+preços da tabela PRXS.
 
 | Item | Preço | Efeito |
 |---|---|---|
@@ -310,19 +341,24 @@ level do sistema (os primeiros `tek + 3`, até 12), com os preços da tabela PRX
 | Missile | 30 Cr | até 4 ("ALL PRESENT") |
 | Large Cargo Bay | 400 Cr | porão de 20 t → 35 t |
 | E.C.M. System | 600 Cr | **E** / botão ECM: destrói todos os mísseis por 32 ciclos, gastando 1 de energia por ciclo |
-| Pulse Laser | 400 Cr | numa vista sem laser (escolha FRONT/REAR/LEFT/RIGHT) |
-| Beam Laser | 1000 Cr | dispara a cada ciclo do loop principal (esquenta mais rápido); troca o de pulso devolvendo 400 Cr |
+| Pulse Laser | 400 Cr | potência 15, 5 tiros/s (escolha a vista FRONT/REAR/LEFT/RIGHT) |
+| Beam Laser | 1000 Cr | dispara a cada ciclo do loop principal (esquenta mais rápido) |
 | Fuel Scoops | 525 Cr | combustível perto do sol (CABTMP ≥ 224: +velocidade/8) e contêineres que passem **por baixo** da nave (item aleatório; cápsulas viram escravos) |
 | Escape Pod | 1000 Cr | **ESC** / EJECT: volta à estação com um Cobra novo e tanque cheio, perdendo a carga; a ficha fica limpa |
 | Energy Bomb | 900 Cr | **TAB** / BOMB: destrói todas as naves por perto, menos a estação (uso único) |
 | Energy Unit | 1500 Cr | recarga de energia em dobro |
 | Docking Computers | 1000 Cr | **C** / DOCK: atracação imediata na zona segura (estação não hostil) |
 | Galactic Hyperspace | 5000 Cr | **CTRL-H** / G-HYP: salto para a galáxia seguinte (8 → 1), chegando ao sistema mais perto de (96, 96); limpa a ficha (uso único) |
+| Military Lasers | 6000 Cr | como o de feixe, com potência 23 — o único que fere o Constrictor |
+| Mining Lasers | 800 Cr | pulsos lentos de potência 50; asteroides destruídos por ele se partem em fragmentos |
+
+Qualquer laser substitui o da vista, devolvendo o preço do antigo; só o mesmo tipo é
+recusado ("LASER PRESENT").
 
 Em voo, os botões dos equipamentos instalados aparecem no alto da tela. O **sol** também
 esquenta a cabine (barra CT): perto demais (A < 30, com A = Σ coordenada_hi²/256), a nave
-queima. A tela STATUS lista o equipamento, e o jogo salvo (versão 2) guarda tudo — saves
-da versão 1 continuam carregando, com o equipamento de fábrica.
+queima. A tela STATUS lista o equipamento, e o jogo salvo guarda tudo — saves antigos
+continuam carregando, com o equipamento de fábrica.
 
 ## Jogo salvo
 

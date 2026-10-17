@@ -2,6 +2,7 @@ package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.galaxy.PlanetSystem
+import com.eliteandroid.missions.Missions
 import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.Stardust
 import com.eliteandroid.ships.DiscShips
@@ -79,16 +80,26 @@ class FlightModel {
     var shipFileIndex = 0
         private set
 
+    /** TP: o estado das missões (ver [Missions]); a sessão o mantém e o grava. */
+    var missionFlags = 0
+
+    /** THERE: estamos no sistema do Constrictor (missão 1). */
+    var constrictorSystem = false
+        private set
+
     /**
      * LOMOD: escolhe o arquivo de naves de um sistema: 2 bits aleatórios, depois governo
-     * ≥ 3 (estável) e tech level ≥ 10 (interno) — "A" a "P". (O arquivo forçado pelas
-     * missões fica de fora.)
+     * ≥ 3 (estável) e tech level ≥ 10 (interno) — "A" a "P". No sistema do Constrictor, o
+     * arquivo G (o único com ele); carregando os planos da missão 2, C ou D (com Thargoids).
      */
     fun loadShipFile(system: PlanetSystem?) {
+        constrictorSystem = system != null && Missions.isConstrictorSystem(system)
         if (system == null) return selectShipFile(0)
+        if (constrictorSystem) return selectShipFile(6)
         var a = combat.rng.nextInt(256) and 3
         a = (a shl 1) or (if (system.governmentCode >= 3) 1 else 0)
         a = (a shl 1) or (if (system.techLevel >= 10) 1 else 0)
+        if (Missions.carryingPlans(missionFlags)) a = (a and 1) or 2
         selectShipFile(a)
     }
 
@@ -225,7 +236,7 @@ class FlightModel {
             f, controls.rollKey, controls.pitchKey, controls.stickX, controls.stickY,
             controls.accelerate, controls.decelerate, controls.targetSpeed,
         )
-        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) combat.laserShot(player.lasers[view.ordinal] and 0x7F)
+        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) combat.laserShot(player.lasers[view.ordinal])
         val alpha = player.alpha * f
         val beta = player.beta * f
         val distance = player.speed * f

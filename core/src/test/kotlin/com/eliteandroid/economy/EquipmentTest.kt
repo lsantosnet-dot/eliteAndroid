@@ -22,17 +22,18 @@ class EquipmentTest {
     @Test
     fun `PRXS prices and the order of the original`() {
         assertEquals(
-            listOf(2L, 300L, 4000L, 6000L, 4000L, 10000L, 5250L, 10000L, 9000L, 15000L, 10000L, 50000L),
+            listOf(2L, 300L, 4000L, 6000L, 4000L, 10000L, 5250L, 10000L, 9000L, 15000L, 10000L, 50000L, 60000L, 8000L),
             Equipment.entries.map { it.price },
         )
     }
 
     @Test
-    fun `items for sale grow with the tech level (tek + 3, up to 12)`() {
+    fun `items for sale grow with the tech level (tek + 3, all 14 from 12)`() {
         assertEquals(3, Equipment.available(0).size)
         assertEquals(7, Equipment.available(galaxy[7].techLevel).size) // Lave: tech 5 (interno 4)
-        assertEquals(12, Equipment.available(9).size)
-        assertEquals(12, Equipment.available(14).size)
+        assertEquals(11, Equipment.available(8).size)
+        assertEquals(14, Equipment.available(9).size)
+        assertEquals(14, Equipment.available(14).size)
     }
 
     @Test
@@ -76,18 +77,28 @@ class EquipmentTest {
     }
 
     @Test
-    fun `pulse laser only on an empty view, beam replaces pulse with a refund`() {
+    fun `any laser replaces another with a refund, the same type is present`() {
         val p = PlayerShip(); val c = rich()
         assertEquals(Result.PRESENT, Equipment.buy(Equipment.PULSE_LASER, 14, p, c, View.FRONT))
         assertEquals(Result.OK, Equipment.buy(Equipment.PULSE_LASER, 14, p, c, View.REAR))
         assertEquals(PlayerShip.PULSE_LASER, p.lasers[View.REAR.ordinal])
 
-        val before = c.cash
+        var before = c.cash
         assertEquals(Result.OK, Equipment.buy(Equipment.BEAM_LASER, 14, p, c, View.FRONT))
         assertEquals(before - 10000 + 4000, c.cash)
         assertEquals(PlayerShip.BEAM_LASER, p.lasers[View.FRONT.ordinal])
         assertEquals(Result.PRESENT, Equipment.buy(Equipment.BEAM_LASER, 14, p, c, View.FRONT))
-        assertEquals(Result.PRESENT, Equipment.buy(Equipment.PULSE_LASER, 14, p, c, View.FRONT))
+
+        before = c.cash
+        assertEquals(Result.OK, Equipment.buy(Equipment.MILITARY_LASER, 14, p, c, View.FRONT))
+        assertEquals(before - 60000 + 10000, c.cash)
+        assertEquals(151, p.lasers[View.FRONT.ordinal]) // Armlas = INT(128.5 + 1.5·POW)
+        assertEquals(Result.OK, Equipment.buy(Equipment.MINING_LASER, 14, p, c, View.LEFT))
+        assertEquals(50, p.lasers[View.LEFT.ordinal])
+        // Voltar ao de pulso: o preço do militar é devolvido (como no original).
+        before = c.cash
+        assertEquals(Result.OK, Equipment.buy(Equipment.PULSE_LASER, 14, p, c, View.FRONT))
+        assertEquals(before - 4000 + 60000, c.cash)
     }
 
     @Test
@@ -136,7 +147,7 @@ class EquipmentTest {
 
         val v1 = s.snapshot().encode().lines()
             .filterNot { it.substringBefore('=') in setOf("lasers", "ecm", "scoops", "pod", "bomb", "energyUnit", "dock", "ghyp") }
-            .joinToString("\n").replace("version=2", "version=1")
+            .joinToString("\n").replace("version=${CommanderSave.VERSION}", "version=1")
         val old = CommanderSave.decode(v1)!!
         assertEquals(listOf(15, 0, 0, 0), old.lasers.toList())
         assertFalse(old.ecm)

@@ -55,6 +55,8 @@ class PlayerShip {
     var energyBomb = false
     /** ENGY: unidade de energia extra (recarga em dobro). */
     var energyUnit = false
+    /** ENGY = 2: a unidade de energia da marinha (recompensa da missão 2; recarga tripla). */
+    var navyEnergyUnit = false
     /** DKCMP: computador de atracação. */
     var dockingComputer = false
     /** GHYP: hiperpropulsor galáctico (uso único). */
@@ -77,7 +79,7 @@ class PlayerShip {
         lasers[0] = PULSE_LASER; lasers.fill(0, 1)
         missiles = 3
         hasEcm = false; fuelScoops = false; escapePod = false; energyBomb = false
-        energyUnit = false; dockingComputer = false; galacticHyperdrive = false
+        energyUnit = false; navyEnergyUnit = false; dockingComputer = false; galacticHyperdrive = false
     }
 
     /** LASCT: contagem do pulso do laser em sincronismos verticais (50 por segundo). */
@@ -137,7 +139,8 @@ class PlayerShip {
                 aftShield = (aftShield + 1f).coerceAtMost(255f)
                 foreShield = (foreShield + 1f).coerceAtMost(255f)
             }
-            energy = (energy + if (energyUnit) 2f else 1f).coerceAtMost(255f) // ENGY + 1
+            val engy = if (navyEnergyUnit) 2 else if (energyUnit) 1 else 0
+            energy = (energy + engy + 1).coerceAtMost(255f) // ENGY + 1
         }
     }
 
@@ -225,6 +228,10 @@ class PlayerShip {
         /** POW: laser de pulso; o de feixe é POW + 128. */
         const val PULSE_LASER = 15
         const val BEAM_LASER = PULSE_LASER + 128
+        /** Armlas = INT(128.5 + 1.5·POW): laser militar (dispara como o de feixe, potência 23). */
+        const val MILITARY_LASER = 151
+        /** Mlas: laser de mineração (pulsos lentos de potência 50; parte asteroides). */
+        const val MINING_LASER = 50
 
         /** ALP1: magnitude do ângulo de rolagem (0..31) a partir de JSTX. */
         fun alp1(jstx: Float): Float {

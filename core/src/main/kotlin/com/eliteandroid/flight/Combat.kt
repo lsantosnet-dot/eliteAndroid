@@ -2,6 +2,7 @@ package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.economy.Commodities
+import com.eliteandroid.missions.Missions
 import com.eliteandroid.ships.Newb
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
@@ -173,15 +174,37 @@ class Combat(private val model: FlightModel) {
 
     private val tmp = Vector3()
 
-    /** Loop principal parte 6: nosso tiro de laser com potência [power] (LAS). */
-    fun laserShot(power: Int) {
-        for (ship in model.ships.toList()) { // cópia: abates podem soltar contêineres
+    /**
+     * Loop principal parte 11: nosso tiro com o laser [laser] da vista (byte LASER; a
+     * potência LAS são os bits 0-6). Só o laser militar fere o Constrictor, e com um quarto
+     * da potência. Um abate solta placas de liga e contêineres (SPIN); um asteroide
+     * destruído pelo laser de mineração se parte em até 3 fragmentos.
+     */
+    fun laserShot(laser: Int) {
+        for (ship in model.ships.toList()) { // cópia: abates podem soltar destroços
             if (ship.killed || !inCrosshairs(ship)) continue
             if (ship.type.isStation) { angry(ship); continue } // indestrutível
+            var power = laser and 0x7F
+            if (ship.type == ShipType.CONSTRICTOR) {
+                if (laser != PlayerShip.MILITARY_LASER) continue
+                power = power ushr 2
+            }
             ship.energy -= power
-            if (ship.energy > 0f) angry(ship)
-            else kill(ship, byUs = true)
+            if (ship.energy > 0f) { angry(ship); continue }
+            kill(ship, byUs = true)
+            if (ship.type == ShipType.ASTEROID && laser == PlayerShip.MINING_LASER) {
+                repeat(dornd() and 3) { spawnChild(ship, ShipType.SPLINTER, 0) }
+            }
+            spin(ship, ShipType.ALLOY_PLATE)
+            spin(ship, ShipType.CANISTER)
         }
+    }
+
+    /** SPIN: 50% de chance de soltar até "max canisters" (byte #0) destroços do tipo [type]. */
+    private fun spin(ship: ShipInstance, type: ShipType) {
+        val a = dornd()
+        if (a < 128) return
+        repeat(a and ship.blueprint.maxCanisters and 15) { spawnChild(ship, type, 0) }
     }
 
     /**
@@ -201,23 +224,23 @@ class Combat(private val model: FlightModel) {
 
     /**
      * Morte (bit 7 do #31): explosão; recompensa (parte 12, nenhuma no witchspace); abater
-     * a polícia (NEWB bit 6) nos torna fugitivos (FIST ≥ 64); 50% de chance de soltar até
-     * "max canisters" contêineres.
+     * a polícia (NEWB bit 6) nos torna fugitivos (FIST ≥ 64); abater o Constrictor cumpre
+     * a missão 1 (TP bit 1). EXNO2: a cada 256 abates, "RIGHT ON COMMANDER!".
      */
     fun kill(ship: ShipInstance, byUs: Boolean) {
         if (ship.killed) return
         ship.killed = true
         ship.cloudCounter = 18f
-        if (byUs) model.player.kills++
+        if (byUs) {
+            model.player.kills++
+            if (model.player.kills % 256 == 0) messages += "RIGHT ON COMMANDER!"
+        }
+        if (ship.type == ShipType.CONSTRICTOR) model.missionFlags = model.missionFlags or Missions.CONSTRICTOR_KILLED
         if (ship.newb and Newb.COP != 0) model.player.legalStatus = model.player.legalStatus or 64
         val bounty = ship.blueprint.bounty
         if (bounty > 0 && !model.witchspace) {
             onBounty(bounty)
             messages += "BOUNTY %d.%d CR".format(bounty / 10, bounty % 10)
-        }
-        if (dornd() < 128) {
-            var count = dornd() and ship.blueprint.maxCanisters
-            while (count-- > 0) spawnChild(ship, ShipType.CANISTER, 0)
         }
         if (missileTarget === ship) unarmMissile()
     }
@@ -300,6 +323,8 @@ class Combat(private val model: FlightModel) {
         extraVesselDelay--
         if (extraVesselDelay >= 0) return
         extraVesselDelay = 0
+        // Carregando os planos da missão 2: 22% de chance de um Thargoid (fothg2).
+        if (Missions.carryingPlans(model.missionFlags) && dornd() >= 200) spawnThargoid()
         val r = dornd()
         if (government != 0) {
             if (r >= 120) return
@@ -321,9 +346,18 @@ class Combat(private val model: FlightModel) {
             }
         } else {
             // Caçador solitário: Cobra Mk III, Asp Mk II, Python ou Fer-de-Lance (CYL2 + 0..3).
+            // No sistema do Constrictor (THERE), com a missão 1 em andamento, é ele.
             extraVesselDelay++
-            val type = ShipType.byId(ShipType.COBRA_PIRATE.id + (a2 and 3))!!
-            model.spawn(ShipInstance(type, pos2).also { it.aiFlag = ai2 })
+            var type = ShipType.byId(ShipType.COBRA_PIRATE.id + (a2 and 3))!!
+            var ai = ai2
+            if (model.constrictorSystem) {
+                ai = 0b11111001 // E.C.M. e agressividade 60
+                val tp = model.missionFlags
+                if (tp and Missions.CONSTRICTOR_IN_PROGRESS != 0 && tp and Missions.CONSTRICTOR_KILLED == 0 &&
+                    many(ShipType.CONSTRICTOR) == 0
+                ) type = ShipType.CONSTRICTOR
+            }
+            model.spawn(ShipInstance(type, pos2).also { it.aiFlag = ai })
         }
     }
 

@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Rectangle
+import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.economy.Commander
 import com.eliteandroid.economy.Equipment
 import com.eliteandroid.economy.Market
@@ -18,6 +19,7 @@ import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.hud.Dashboard
 import com.eliteandroid.input.FlightInput
+import com.eliteandroid.missions.Missions
 import com.eliteandroid.render.HudLayer
 import com.eliteandroid.render.LaunchTunnel
 import com.eliteandroid.render.NeonLineBatch
@@ -26,6 +28,8 @@ import com.eliteandroid.render.SpaceView
 import com.eliteandroid.save.CommanderSave
 import com.eliteandroid.save.MemoryStorage
 import com.eliteandroid.save.SaveStorage
+import com.eliteandroid.ships.ShipInstance
+import com.eliteandroid.ships.ShipType
 
 /**
  * Ciclo de jogo:
@@ -87,6 +91,15 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     /** Força o próximo salto a falhar (CTRL segurado na hora do salto, como no original). */
     @Volatile var forceMisjump = false
 
+    /** Mensagem de missão em exibição (atracado) e a página atual. */
+    @Volatile var briefing: Missions.Briefing? = null
+        private set
+    @Volatile var briefingPage = 0
+        private set
+
+    /** O Constrictor girando na tela do briefing da missão 1. */
+    private val briefingShip = ShipInstance(ShipType.CONSTRICTOR, Vector3(0f, 140f, 900f))
+
     /** A contagem em andamento é do hiperpropulsor galáctico. */
     private var galacticJump = false
 
@@ -110,7 +123,15 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         input.requestedView = null
 
         when (state) {
-            State.DOCKED -> if (input.launchRequested) enter(State.LAUNCHING)
+            State.DOCKED -> when {
+                briefing != null -> {
+                    if (input.launchRequested) nextBriefingPage()
+                    // BRL1: o Constrictor rola e mergulha sem parar (contadores 127).
+                    briefingShip.rollCounter = 127f; briefingShip.pitchCounter = 127f
+                    briefingShip.moveSelf(delta * FlightModel.TICK_RATE / 4f)
+                }
+                input.launchRequested -> enter(State.LAUNCHING)
+            }
             State.LAUNCHING -> if (stateTime >= LaunchTunnel.DURATION) {
                 // TT110: sair com carga ilegal piora o status legal.
                 model.player.legalStatus = model.player.legalStatus or commander.contraband
@@ -137,6 +158,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
             }
             State.DOCKING -> if (stateTime >= LaunchTunnel.DURATION) {
                 enter(State.DOCKED)
+                missionEntry()
                 if (save()) flash("GAME SAVED")
             }
             State.DESTROYED -> if (stateTime >= 3f) restartCommander()
@@ -176,6 +198,32 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     internal fun ejectPod() {
         if (inWitchspace) enter(State.DESTROYED) else escapePod()
     }
+
+    /**
+     * DOENTRY: ao atracar, as missões podem começar, avançar ou terminar — com mensagem e
+     * recompensa (créditos, abates, a unidade de energia da marinha).
+     */
+    @Synchronized fun missionEntry() {
+        val p = model.player
+        val e = Missions.onDocked(model.missionFlags, p.kills, galaxy.number, currentSystem)
+        model.missionFlags = e.tp
+        if (e.rewardCash > 0) commander.earn(e.rewardCash)
+        p.kills += e.rewardKills
+        if (e.navyEnergyUnit) p.navyEnergyUnit = true
+        briefing = e.briefing
+        briefingPage = 0
+        briefingShip.setOrientation(Vector3(0f, 0f, -1f))
+    }
+
+    /** Avança a mensagem de missão (toque ou tecla); na última página, ela se fecha. */
+    @Synchronized fun nextBriefingPage() {
+        val b = briefing ?: return
+        if (briefingPage + 1 < b.pages.size) briefingPage++ else briefing = null
+    }
+
+    /** "Data on System" de [s], com os recados das missões no lugar da descrição. */
+    fun dataScreen(s: PlanetSystem): String =
+        s.dataScreen(Missions.systemHint(s, model.missionFlags) ?: s.description)
 
     /**
      * ESCAPE: abandonamos a nave e a cápsula nos leva à estação do sistema atual. A
@@ -293,6 +341,8 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         energyUnit = model.player.energyUnit,
         dockingComputer = model.player.dockingComputer,
         galacticHyperdrive = model.player.galacticHyperdrive,
+        missions = model.missionFlags,
+        navyEnergyUnit = model.player.navyEnergyUnit,
     )
 
     /** Grava o comandante (só atracado, como no original). */
@@ -327,6 +377,9 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         p.energyUnit = s.energyUnit
         p.dockingComputer = s.dockingComputer
         p.galacticHyperdrive = s.galacticHyperdrive
+        p.navyEnergyUnit = s.navyEnergyUnit
+        model.missionFlags = s.missions
+        briefing = null
         galacticJump = false
         enter(State.DOCKED)
         return true
@@ -350,6 +403,8 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         hyperspaceTarget = null
         model.player.fuel = 70f
         model.player.resetEquipment()
+        model.missionFlags = 0
+        briefing = null
         model.player.legalStatus = 0
         model.player.kills = 0
     }
@@ -424,10 +479,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
 
     fun render(view: SpaceView) {
         val flying = state == State.FLYING
-        view.render(
-            model = if (flying) model else null,
-            view = model.view,
-            hud = object : HudLayer {
+        val hud = object : HudLayer {
                 override fun worldLines(lines: NeonLineBatch) = drawLines(view, lines)
                 override fun panels(out: (Rectangle) -> Unit) { if (flying) out(dashboard.bounds) }
                 override fun panelLines(lines: NeonLineBatch) { if (flying) dashboard.drawLines(lines, model) }
@@ -435,8 +487,12 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
                     drawText(view, batch, font)
                     if (flying) dashboard.drawText(batch, font)
                 }
-            },
-        )
+            }
+        if (state == State.DOCKED && briefing?.showsConstrictor == true) {
+            view.render(listOf(briefingShip), null, View.FRONT, hud)
+        } else {
+            view.render(model = if (flying) model else null, view = model.view, hud = hud)
+        }
     }
 
     private fun drawLines(view: SpaceView, lines: NeonLineBatch) {
@@ -490,9 +546,19 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         font.color = HUD_GREEN
         when (state) {
             State.DOCKED -> {
+                val desktop = Gdx.app?.type == Application.ApplicationType.Desktop
+                val b = briefing
+                if (b != null) {
+                    // No Android, a mensagem aparece numa View; aqui só no desktop.
+                    centered(batch, font, "INCOMING MESSAGE", w / 2f, h - font.lineHeight)
+                    if (desktop) {
+                        font.draw(batch, b.pages[briefingPage], w * 0.12f, h * 0.48f, w * 0.76f, com.badlogic.gdx.utils.Align.left, true)
+                        centered(batch, font, "ENTER  TO CONTINUE", w / 2f, font.lineHeight * 1.5f)
+                    }
+                    return
+                }
                 centered(batch, font, "DOCKED  -  ${currentSystem.name}", w / 2f, h * 0.62f)
-                if (Gdx.app?.type == Application.ApplicationType.Desktop)
-                    centered(batch, font, "L / ENTER  TO LAUNCH", w / 2f, h * 0.45f)
+                if (desktop) centered(batch, font, "L / ENTER  TO LAUNCH", w / 2f, h * 0.45f)
             }
             State.FLYING -> {
                 centered(batch, font, model.view.label, w / 2f, h - font.lineHeight * 0.6f)

@@ -15,8 +15,9 @@ import com.badlogic.gdx.math.Vector3
  * desenhado — 31 = sempre.
  *
  * As normais das faces vêm do bloco FACE do original quando ele é fornecido (modelos da
- * versão em disco): como no LL9, a própria normal (escalada por 2^[normalScale]) serve de
- * ponto sobre a face, e faces sem normal (como a 15 das placas de liga) estão sempre
+ * versão em disco): como no LL9 parte 5, a face é visível se (normal / 2^[normalScale] −
+ * observador) · normal < 0 — a normal reduzida faz as vezes de um ponto da face, perto do
+ * centro da nave —, e faces sem normal (como a 15 das placas de liga) estão sempre
  * visíveis. Sem o bloco FACE, as normais são calculadas a partir da geometria (os valores
  * do original são aproximações inteiras dessas mesmas normais).
  */
@@ -105,7 +106,7 @@ class ShipBlueprint private constructor(
 
     private fun useSourceFaces() {
         val n = Vector3()
-        val scale = (1 shl normalScale).toFloat()
+        val scale = 1f / (1 shl normalScale) // LL92/LL93: a normal é dividida por 2^X
         for (f in 0 until faceCount) {
             val i = f * 3
             val src = f * 4

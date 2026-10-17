@@ -4,7 +4,7 @@ package com.eliteandroid.save
  * Arquivo do comandante, no espírito do original (bloco NA%, gravado só quando atracado):
  * sistema atual e destino, dinheiro, combustível, porão, capacidade, mísseis, status legal
  * (FIST), abates (TALLY), o mercado da visita (QQ26 + oferta AVL) e os equipamentos
- * (lasers por vista e os itens da loja).
+ * (lasers por vista e os itens da loja) e as missões (TP).
  *
  * Formato texto "chave=valor" por linha, versionado, fácil de inspecionar. A versão 1
  * (sem equipamentos) ainda é lida, com o equipamento de fábrica.
@@ -30,6 +30,9 @@ data class CommanderSave(
     val energyUnit: Boolean = false,
     val dockingComputer: Boolean = false,
     val galacticHyperdrive: Boolean = false,
+    /** TP: estado das missões da versão em disco. */
+    val missions: Int = 0,
+    val navyEnergyUnit: Boolean = false,
 ) {
     fun encode(): String = buildString {
         appendLine("version=$VERSION")
@@ -53,6 +56,8 @@ data class CommanderSave(
         appendLine("energyUnit=${energyUnit.bit}")
         appendLine("dock=${dockingComputer.bit}")
         appendLine("ghyp=${galacticHyperdrive.bit}")
+        appendLine("missions=$missions")
+        appendLine("navyEnergyUnit=${navyEnergyUnit.bit}")
     }
 
     private val Boolean.bit get() = if (this) 1 else 0
@@ -61,7 +66,7 @@ data class CommanderSave(
     override fun hashCode() = encode().hashCode()
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
 
         /** Lê um arquivo salvo; null se estiver ausente, corrompido ou de versão desconhecida. */
         fun decode(text: String?): CommanderSave? {
@@ -94,6 +99,8 @@ data class CommanderSave(
                     energyUnit = flag("energyUnit"),
                     dockingComputer = flag("dock"),
                     galacticHyperdrive = flag("ghyp"),
+                    missions = (m["missions"]?.toInt() ?: 0) and 0xFF,
+                    navyEnergyUnit = flag("navyEnergyUnit"),
                 )
             } catch (e: Exception) {
                 null

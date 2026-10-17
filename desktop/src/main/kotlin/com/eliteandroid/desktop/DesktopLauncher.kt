@@ -22,7 +22,7 @@ import com.eliteandroid.flight.View
  * [--docked] fotografa a tela de atracado; [--beam] instala um laser de feixe na frente e
  * [--bomb] detona a bomba de energia (com [--combat], no meio da batalha) e
  * [--witchspace] força um mis-jump (para o destino de [--arrive], ou Diso) e [--gallery]
- * mostra as naves da versão em disco lado a lado:
+ * mostra as naves da versão em disco lado a lado; [--briefing] mostra o briefing da missão 1:
  *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
 fun main(args: Array<String>) {
@@ -42,6 +42,7 @@ fun main(args: Array<String>) {
         bomb = "--bomb" in args,
         witchspace = "--witchspace" in args,
         gallery = "--gallery" in args,
+        briefing = "--briefing" in args,
     )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
@@ -95,6 +96,7 @@ private class ShotSpec(
     val bomb: Boolean,
     val witchspace: Boolean,
     val gallery: Boolean,
+    val briefing: Boolean,
 )
 
 /** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
@@ -106,7 +108,12 @@ private class ScreenshotWrapper(
     private var frames = 0
 
     override fun render() {
-        if (frames == 0 && !shot.docked) {
+        if (frames == 0 && shot.briefing) {
+            game.session.model.player.kills = 256
+            game.session.missionEntry()
+            repeat(20) { game.session.update(1f / 60f) } // o Constrictor já girando
+        }
+        if (frames == 0 && !shot.docked && !shot.briefing) {
             val session = game.session
             val target = shot.arrive?.let { session.galaxy.findByName(it) }
             if (shot.witchspace) {

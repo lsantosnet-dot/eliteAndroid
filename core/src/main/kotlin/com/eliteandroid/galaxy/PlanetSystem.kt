@@ -87,7 +87,8 @@ data class PlanetSystem(
     val displayName: String get() = capitalizeName(name)
 
     /** Texto equivalente à tela "Data on <planeta>" (comando `local`/`info` de Text Elite). */
-    fun dataScreen(): String = buildString {
+    /** "Data on System"; [description] substitui a descrição (recados das missões). */
+    fun dataScreen(description: String = this.description): String = buildString {
         appendLine("System:  $name")
         appendLine("Position ($x,$y)")
         appendLine("Economy: (${economyCode}) ${economy.shortLabel}")

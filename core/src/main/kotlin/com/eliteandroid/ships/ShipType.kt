@@ -40,7 +40,8 @@ enum class ShipType(val id: Int, val blueprint: ShipBlueprint, rgb: Int) {
     FER_DE_LANCE(27, DiscShips.FER_DE_LANCE, 0xFFA040),
     MORAY(28, DiscShips.MORAY, 0xFF6080),
     THARGOID(29, DiscShips.THARGOID, 0x9CFF30),           // THG
-    THARGON(30, DiscShips.THARGON, 0x70D040);             // TGL
+    THARGON(30, DiscShips.THARGON, 0x70D040),             // TGL
+    CONSTRICTOR(31, DiscShips.CONSTRICTOR, 0xFF2020);     // CON: missão 1
 
     /** Cor neon (empacotada) usada no wireframe e no radar. */
     val color: Float = Color(((rgb shr 16) and 255) / 255f, ((rgb shr 8) and 255) / 255f, (rgb and 255) / 255f, 1f).toFloatBits()

@@ -198,12 +198,12 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         Equipment.MISSILE -> "${p.missiles}/${Equipment.MAX_MISSILES}"
         Equipment.LARGE_CARGO_BAY -> if (cmdr.cargoCapacity >= Equipment.LARGE_CARGO_CAPACITY) "FITTED" else ""
         Equipment.ECM -> if (p.hasEcm) "FITTED" else ""
-        Equipment.PULSE_LASER -> laserViews(p) { it != 0 && it and 0x80 == 0 }
-        Equipment.BEAM_LASER -> laserViews(p) { it and 0x80 != 0 }
+        Equipment.PULSE_LASER, Equipment.BEAM_LASER, Equipment.MILITARY_LASER, Equipment.MINING_LASER ->
+            laserViews(p) { it == item.laser }
         Equipment.FUEL_SCOOPS -> if (p.fuelScoops) "FITTED" else ""
         Equipment.ESCAPE_POD -> if (p.escapePod) "FITTED" else ""
         Equipment.ENERGY_BOMB -> if (p.energyBomb) "FITTED" else ""
-        Equipment.ENERGY_UNIT -> if (p.energyUnit) "FITTED" else ""
+        Equipment.ENERGY_UNIT -> if (p.navyEnergyUnit) "NAVY" else if (p.energyUnit) "FITTED" else ""
         Equipment.DOCKING_COMPUTER -> if (p.dockingComputer) "FITTED" else ""
         Equipment.GALACTIC_HYPERDRIVE -> if (p.galacticHyperdrive) "FITTED" else ""
     }
@@ -215,7 +215,8 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     private fun laserList(p: PlayerShip): List<String> = SpaceDirection.entries.mapNotNull { v ->
         val l = p.lasers[v.ordinal]
         if (l == 0) null
-        else v.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() } + if (l and 0x80 != 0) " Beam Laser" else " Pulse Laser"
+        else v.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() } + " " +
+            (Equipment.ofLaser(l)?.label?.removeSuffix("s") ?: "Laser")
     }
 
     private fun trade(index: Int, buy: Boolean) {
@@ -292,7 +293,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
                 if (p.fuelScoops) "Fuel Scoops" else null,
                 if (p.escapePod) "Escape Pod" else null,
                 if (p.energyBomb) "Energy Bomb" else null,
-                if (p.energyUnit) "Extra Energy Unit" else null,
+                if (p.navyEnergyUnit) "Navy Energy Unit" else if (p.energyUnit) "Extra Energy Unit" else null,
                 if (p.dockingComputer) "Docking Computers" else null,
                 if (p.galacticHyperdrive) "Galactic Hyperspace" else null,
             )
@@ -313,7 +314,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         val shown = target ?: here
         dataText.text = buildString {
             if (shown !== here) appendLine(String.format(Locale.US, "Distance: %.1f Light Years", GalaxyGenerator.distance(here, shown) / 10f))
-            append(shown.dataScreen())
+            append(sess.dataScreen(shown))
         }
         chart.invalidate()
     }
