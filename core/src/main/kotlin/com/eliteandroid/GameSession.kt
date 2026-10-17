@@ -21,6 +21,9 @@ import com.eliteandroid.render.LaunchTunnel
 import com.eliteandroid.render.NeonLineBatch
 import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.SpaceView
+import com.eliteandroid.save.CommanderSave
+import com.eliteandroid.save.MemoryStorage
+import com.eliteandroid.save.SaveStorage
 
 /**
  * Ciclo de jogo:
@@ -29,7 +32,9 @@ import com.eliteandroid.render.SpaceView
  *   sol atrás) → aproximação do planeta → a estação surge → atracação → atracado (novo
  *   mercado) → …
  *
- * Destruição: GAME OVER e o comandante padrão volta a Lave (como recarregar JAMESON).
+ * Jogo salvo: como no original, o comandante é gravado quando atracado (automaticamente
+ * ao atracar, ao sair do app atracado, ou pelo botão SAVE). Destruição: GAME OVER e o
+ * último comandante salvo é recarregado (ou JAMESON em Lave, se não houver).
  */
 class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
 
@@ -40,6 +45,9 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
     val dashboard = Dashboard()
 
     val commander = Commander()
+
+    /** Onde o comandante é gravado (Preferences no jogo; memória nos testes). */
+    var storage: SaveStorage = MemoryStorage()
 
     /** Lidos também pela interface Android (thread de UI). */
     @Volatile var state = State.DOCKED
@@ -92,7 +100,10 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
                 }
                 if (messageTime <= 0f) model.combat.messages.removeFirstOrNull()?.let { flash(it) }
             }
-            State.DOCKING -> if (stateTime >= LaunchTunnel.DURATION) enter(State.DOCKED)
+            State.DOCKING -> if (stateTime >= LaunchTunnel.DURATION) {
+                enter(State.DOCKED)
+                if (save()) flash("GAME SAVED")
+            }
             State.DESTROYED -> if (stateTime >= 3f) restartCommander()
             State.HYPERSPACE -> if (stateTime >= HYPERSPACE_TUNNEL) arrive()
         }
@@ -134,8 +145,65 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         }
     }
 
-    /** Morte: volta o comandante padrão (JAMESON em Lave, 100 Cr, porão vazio, tanque cheio). */
+    /** Morte: recarrega o último comandante salvo, ou JAMESON se não houver. */
     @Synchronized private fun restartCommander() {
+        if (!loadSaved()) resetToJameson()
+        enter(State.DOCKED)
+    }
+
+    // ------------------------------------------------------------ jogo salvo
+
+    /** O estado atual como arquivo de comandante. */
+    @Synchronized fun snapshot(): CommanderSave = CommanderSave(
+        galaxy = galaxy.number,
+        system = currentSystem.index,
+        target = hyperspaceTarget?.index,
+        cash = commander.cash,
+        fuel = model.player.fuel,
+        cargo = commander.cargo.copyOf(),
+        cargoCapacity = commander.cargoCapacity,
+        missiles = model.player.missiles,
+        legalStatus = model.player.legalStatus,
+        kills = model.player.kills,
+        marketFluct = market.fluct,
+        marketAvailability = market.availability.copyOf(),
+    )
+
+    /** Grava o comandante (só atracado, como no original). */
+    @Synchronized fun save(): Boolean {
+        if (state != State.DOCKED) return false
+        storage.write(snapshot().encode())
+        return true
+    }
+
+    val hasSave: Boolean get() = CommanderSave.decode(storage.read()) != null
+
+    /** Carrega o comandante salvo e põe a nave atracada no sistema dele. */
+    @Synchronized fun loadSaved(): Boolean {
+        val s = CommanderSave.decode(storage.read()) ?: return false
+        if (s.galaxy != galaxy.number) return false
+        val here = galaxy[s.system]
+        commander.restore(s.cash, s.cargo, s.cargoCapacity)
+        currentSystem = here
+        hyperspaceTarget = s.target?.let { galaxy[it] }?.takeIf { it.index != here.index }
+        market = Market(here, s.marketFluct, s.marketAvailability)
+        model.player.fuel = s.fuel
+        model.player.missiles = s.missiles
+        model.player.legalStatus = s.legalStatus
+        model.player.kills = s.kills
+        enter(State.DOCKED)
+        return true
+    }
+
+    /** NEW GAME: apaga o arquivo e recomeça como JAMESON em Lave. */
+    @Synchronized fun newGame() {
+        storage.clear()
+        resetToJameson()
+        enter(State.DOCKED)
+    }
+
+    /** Comandante padrão: JAMESON em Lave, 100 Cr, porão vazio, tanque cheio, 3 mísseis. */
+    @Synchronized private fun resetToJameson() {
         commander.reset()
         currentSystem = homeSystem
         market = Market(homeSystem, fluct = 0, initialAvailability = Market.JAMESON_AVAILABILITY)
@@ -144,7 +212,6 @@ class GameSession(val galaxy: Galaxy, private val homeSystem: PlanetSystem) {
         model.player.missiles = 3
         model.player.legalStatus = 0
         model.player.kills = 0
-        enter(State.DOCKED)
     }
 
     // ------------------------------------------------------------------ comércio (UI)

@@ -41,6 +41,8 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     private val marketRows = LinearLayout(context).apply { orientation = VERTICAL }
     private val marketScroll = ScrollView(context).apply { addView(marketRows) }
     private val statusText = text(13f, NeonStyle.GREEN)
+    private val statusBox = LinearLayout(context).apply { orientation = VERTICAL }
+    private var newGameArmedAt = 0L
     private val dataText = text(13f, NeonStyle.GREEN)
     private val equipBox = LinearLayout(context).apply { orientation = VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
     private val equipText = text(14f, NeonStyle.GREEN)
@@ -69,6 +71,14 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         addView(feedback, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         buildMarketRows()
+        statusBox.addView(ScrollView(context).apply { addView(statusText) }, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+        val saveRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            addView(button("SAVE GAME", NeonStyle.GREEN) { saveGame() }, LayoutParams(0, dp(42f), 1f).apply { marginEnd = dp(6f) })
+            addView(button("SAVE & EXIT", NeonStyle.CYAN) { saveAndExit() }, LayoutParams(0, dp(42f), 1f).apply { marginEnd = dp(6f) })
+            addView(button("NEW GAME", NeonStyle.RED) { newGame() }, LayoutParams(0, dp(42f), 1f))
+        }
+        statusBox.addView(saveRow)
         equipBox.addView(equipText)
         equipBox.addView(button("BUY FUEL", NeonStyle.YELLOW) { refuel() }, LayoutParams(dp(200f), dp(48f)).apply { topMargin = dp(16f) })
         val chartToggle = LinearLayout(context).apply {
@@ -103,7 +113,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         content.removeAllViews()
         val view: View = when (t) {
             Tab.MARKET -> marketScroll
-            Tab.STATUS -> ScrollView(context).apply { addView(statusText) }
+            Tab.STATUS -> statusBox
             Tab.EQUIP -> equipBox
             Tab.CHART -> chartBox
             Tab.DATA -> ScrollView(context).apply { addView(dataText) }
@@ -147,6 +157,29 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
             Commander.TradeResult.NO_ROOM -> "CARGO BAY FULL"
             Commander.TradeResult.NONE_IN_HOLD -> "NONE IN THE HOLD"
         }
+        refresh()
+    }
+
+    private fun saveGame() {
+        feedback.text = if (session()?.save() == true) "GAME SAVED" else "CAN ONLY SAVE WHILE DOCKED"
+    }
+
+    private fun saveAndExit() {
+        if (session()?.save() == true) (context as? android.app.Activity)?.finish()
+        else feedback.text = "CAN ONLY SAVE WHILE DOCKED"
+    }
+
+    /** Recomeça como JAMESON em Lave; exige um segundo toque em até 3 s. */
+    private fun newGame() {
+        val now = System.currentTimeMillis()
+        if (now - newGameArmedAt > 3000L) {
+            newGameArmedAt = now
+            feedback.text = "TAP NEW GAME AGAIN TO ERASE THE SAVED COMMANDER"
+            return
+        }
+        newGameArmedAt = 0L
+        session()?.newGame()
+        feedback.text = "NEW COMMANDER: JAMESON AT LAVE"
         refresh()
     }
 

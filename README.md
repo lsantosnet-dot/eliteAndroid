@@ -11,6 +11,7 @@ Referências: *Mark Moxon's Elite Disassembly* e *Text Elite* (Ian Bell).
 core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Android SDK)
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
   economy/  Commodities (QQ23), Market (GVL/TT151), Commander (CASH, QQ20, CRGO)
+  save/     CommanderSave (arquivo do comandante), PreferencesStorage
   ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), OriginalShips (gerado),
             ShipType (tabela XX21), ShipInstance (nosev/roofv/sidev + estado de combate)
   flight/   FlightModel (MVEIT, ISDK, SOLAR, WARP), Combat (TACTICS, surgimento, mísseis),
@@ -196,8 +197,7 @@ level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremul
 256 × 192); a tela larga só amplia a visão lateral.
 
 Fora do escopo por enquanto: mis-jumps para o witchspace (0.78% dos saltos, com
-Thargoids), equipamentos além de combustível, coleta de combustível no sol e salvar o
-comandante.
+Thargoids), equipamentos além de combustível e coleta de combustível no sol.
 
 ## Naves inimigas e mísseis
 
@@ -225,3 +225,15 @@ mísseis, recompensa, contêineres, vértice do canhão, explosão).
   alvo; alvos com E.C.M. podem destruí-lo (6% por ciclo). Mísseis inimigos causam 250.
 - **Abates**: explosão (DOEXP), recompensa em créditos, contagem para a classificação
   (Harmless … Elite) e 50% de chance de soltar contêineres. Colisões: 128 + energia/2.
+
+## Jogo salvo
+
+Como no original, o comandante é gravado **quando atracado**: automaticamente ao
+atracar, ao sair do app atracado, ou pelos botões **SAVE GAME** / **SAVE & EXIT** da aba
+STATUS. Ao abrir o app, o último comandante volta atracado na mesma estação, com
+dinheiro, porão, combustível, mísseis, abates, status legal, destino escolhido e o
+mercado daquela visita (QQ26 + oferta). **NEW GAME** (dois toques) recomeça como JAMESON
+em Lave. Se a nave for destruída, o último comandante salvo é recarregado.
+
+O arquivo é texto `chave=valor` versionado, guardado nas Preferences do LibGDX
+(SharedPreferences no Android; `~/.prefs/elite-commander` no desktop).

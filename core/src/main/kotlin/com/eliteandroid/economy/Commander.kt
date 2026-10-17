@@ -51,6 +51,13 @@ class Commander {
         return TradeResult.OK
     }
 
+    /** Restaura dinheiro, porão e capacidade de um jogo salvo. */
+    @Synchronized fun restore(cash: Long, cargo: IntArray, capacity: Int) {
+        this.cash = cash
+        cargo.copyInto(this.cargo)
+        cargoCapacity = capacity
+    }
+
     /** Recebe [tenths] décimos de crédito (recompensas). */
     @Synchronized fun earn(tenths: Long) {
         cash += tenths

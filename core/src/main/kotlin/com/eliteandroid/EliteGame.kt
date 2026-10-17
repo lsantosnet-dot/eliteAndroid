@@ -6,6 +6,7 @@ import com.eliteandroid.galaxy.Galaxy
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.render.SpaceView
+import com.eliteandroid.save.PreferencesStorage
 
 /**
  * Ponto de entrada LibGDX (multiplataforma). Mantém o estado da galáxia e a sessão de voo.
@@ -29,6 +30,9 @@ class EliteGame : ApplicationAdapter() {
 
     override fun create() {
         session = GameSession(galaxy, currentSystem)
+        // Continua de onde parou: carrega o último comandante salvo, se houver.
+        session.storage = PreferencesStorage()
+        session.loadSaved()
         view = SpaceView()
         resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
         sessionOrNull = session
@@ -43,6 +47,11 @@ class EliteGame : ApplicationAdapter() {
     override fun render() {
         session.update(Gdx.graphics.deltaTime)
         session.render(view)
+    }
+
+    /** O app foi para segundo plano: se estiver atracado, grava o comandante. */
+    override fun pause() {
+        if (::session.isInitialized) session.save()
     }
 
     override fun dispose() {
