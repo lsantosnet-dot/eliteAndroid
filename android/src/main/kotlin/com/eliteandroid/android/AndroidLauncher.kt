@@ -22,8 +22,10 @@ import java.util.Locale
  * Activity principal: a superfície LibGDX ocupa a tela inteira e as Views Android
  * (HUD/menus/controles touch) ficam sobrepostas em um FrameLayout.
  *
- * Etapa 2: vista espacial wireframe neon. Toque no título para abrir/fechar a ficha
- * "Data on"; toque na ficha para percorrer os sistemas a até 7 LY de Lave.
+ * Etapa 3: voo. Os controles touch provisórios são desenhados pelo próprio jogo (ver
+ * FlightInput); a interface definitiva em Views Android chega na Etapa 5.
+ * Toque em [ DATA ] para abrir/fechar a ficha "Data on"; toque na ficha para percorrer os
+ * sistemas a até 7 LY de Lave.
  */
 class AndroidLauncher : AndroidApplication() {
 
@@ -45,7 +47,7 @@ class AndroidLauncher : AndroidApplication() {
         val gdxView = initializeForView(game, config)
 
         titleView = hudText(16f).apply {
-            text = "${game.currentSystem.name}  ·  CORIOLIS STATION   [ DATA ]"
+            text = "[ DATA ]"
             setOnClickListener { toggleData() }
         }
         dataView = hudText(14f).apply {

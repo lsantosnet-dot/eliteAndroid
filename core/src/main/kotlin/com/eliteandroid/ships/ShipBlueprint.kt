@@ -27,6 +27,8 @@ class ShipBlueprint private constructor(
     /** Arestas de detalhe (fendas, decalques, canhão): não definem o plano das faces. */
     private val edgeDetail: BooleanArray,
     val faceCount: Int,
+    /** Byte #13 do modelo: além de z_hi (z/256) maior que isto, a nave vira um ponto. */
+    val visibilityDistance: Int,
 ) {
     val vertexCount: Int get() = vertices.size / 3
     val edgeCount: Int get() = edges.size / 4
@@ -106,6 +108,9 @@ class ShipBlueprint private constructor(
         private val edgeDet = ArrayList<Boolean>()
         private var faces = 0
 
+        /** Byte #13 do bloco do modelo ("Visibility distance"). */
+        var visibilityDistance = 31
+
         fun vertex(x: Int, y: Int, z: Int) {
             verts += x.toFloat(); verts += y.toFloat(); verts += z.toFloat()
         }
@@ -124,7 +129,7 @@ class ShipBlueprint private constructor(
         fun build(): ShipBlueprint =
             ShipBlueprint(
                 name, verts.toFloatArray(), edgeData.toIntArray(), edgeVis.toIntArray(),
-                edgeDet.toBooleanArray(), faces,
+                edgeDet.toBooleanArray(), faces, visibilityDistance,
             )
     }
 

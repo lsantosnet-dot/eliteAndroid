@@ -8,8 +8,7 @@ import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.render.SpaceView
 
 /**
- * Ponto de entrada LibGDX (multiplataforma). Mantém o estado da galáxia e desenha a
- * vista espacial em wireframe neon.
+ * Ponto de entrada LibGDX (multiplataforma). Mantém o estado da galáxia e a sessão de voo.
  */
 class EliteGame : ApplicationAdapter() {
 
@@ -20,23 +19,26 @@ class EliteGame : ApplicationAdapter() {
     var currentSystem: PlanetSystem = galaxy[7]
         private set
 
-    lateinit var scene: DemoScene
+    lateinit var session: GameSession
         private set
     private lateinit var view: SpaceView
 
     override fun create() {
-        scene = DemoScene()
+        session = GameSession(currentSystem.name)
         view = SpaceView()
-        view.resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
+        resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
+        Gdx.input.inputProcessor = session.input
     }
 
     override fun resize(width: Int, height: Int) {
-        view.resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
+        val w = Gdx.graphics.backBufferWidth; val h = Gdx.graphics.backBufferHeight
+        view.resize(w, h)
+        session.input.layout(w.toFloat(), h.toFloat())
     }
 
     override fun render() {
-        scene.update(minOf(Gdx.graphics.deltaTime, 1f / 15f))
-        view.render(scene.ships, scene.dust)
+        session.update(Gdx.graphics.deltaTime)
+        session.render(view)
     }
 
     override fun dispose() {

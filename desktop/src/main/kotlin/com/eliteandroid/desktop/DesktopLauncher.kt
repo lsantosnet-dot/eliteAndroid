@@ -7,16 +7,29 @@ import com.badlogic.gdx.graphics.PixmapIO
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration
 import com.eliteandroid.EliteGame
+import com.eliteandroid.flight.FlightControls
+import com.eliteandroid.flight.View
 
 /**
  * Executa o jogo no desktop (desenvolvimento).
  *
  *   ./gradlew :desktop:run
- *   ./gradlew :desktop:run --args="--screenshot shot.png --time 4.5"   (salva um PNG e sai)
+ *
+ * Captura de tela (salva um PNG e sai): decola, voa [--time] segundos com o manche em
+ * [--roll]/[--pitch] (−1..1), velocidade-alvo [--speed] (1..40) e fotografa na vista
+ * [--view] (front, rear, left, right). [--docked] fotografa a tela de atracado:
+ *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
 fun main(args: Array<String>) {
     val shotPath = args.valueAfter("--screenshot")
-    val shotTime = args.valueAfter("--time")?.toFloat() ?: 0f
+    val shot = ShotSpec(
+        time = args.valueAfter("--time")?.toFloat() ?: 0f,
+        view = args.valueAfter("--view")?.let { View.valueOf(it.uppercase()) } ?: View.FRONT,
+        roll = args.valueAfter("--roll")?.toFloat() ?: 0f,
+        pitch = args.valueAfter("--pitch")?.toFloat() ?: 0f,
+        docked = "--docked" in args,
+        speed = args.valueAfter("--speed")?.toFloat(),
+    )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
         setWindowedMode(args.valueAfter("--width")?.toInt() ?: 1600, args.valueAfter("--height")?.toInt() ?: 740)
@@ -24,30 +37,39 @@ fun main(args: Array<String>) {
         setForegroundFPS(60)
     }
     val game = EliteGame()
-    Lwjgl3Application(if (shotPath != null) ScreenshotWrapper(game, shotPath, shotTime) else game, config)
+    Lwjgl3Application(if (shotPath != null) ScreenshotWrapper(game, shotPath, shot) else game, config)
 }
 
 private fun Array<String>.valueAfter(flag: String): String? = indexOf(flag).takeIf { it >= 0 }?.let { getOrNull(it + 1) }
 
-/** Congela a cena no instante [time], renderiza alguns quadros e grava o framebuffer em PNG. */
+private class ShotSpec(
+    val time: Float, val view: View, val roll: Float, val pitch: Float, val docked: Boolean, val speed: Float?,
+)
+
+/** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
 private class ScreenshotWrapper(
     private val game: EliteGame,
     private val path: String,
-    private val time: Float,
+    private val shot: ShotSpec,
 ) : ApplicationListener by game {
     private var frames = 0
 
     override fun render() {
-        if (frames == 0) game.scene.setTime(time)
+        if (frames == 0 && !shot.docked) {
+            val session = game.session
+            session.launchNow()
+            val controls = FlightControls().apply { stickX = shot.roll; stickY = shot.pitch; targetSpeed = shot.speed }
+            var t = 0f
+            while (t < shot.time) { session.model.update(1f / 60f, controls); t += 1f / 60f }
+            session.model.view = shot.view
+        }
         game.render()
         if (++frames == 3) {
             val w = Gdx.graphics.backBufferWidth; val h = Gdx.graphics.backBufferHeight
+            // createFromFrameBuffer já devolve as linhas de cima para baixo.
             val pixmap = Pixmap.createFromFrameBuffer(0, 0, w, h)
-            // O framebuffer vem de baixo para cima; inverte para o PNG.
-            val flipped = Pixmap(w, h, Pixmap.Format.RGBA8888)
-            for (y in 0 until h) flipped.drawPixmap(pixmap, 0, y, w, 1, 0, h - 1 - y, w, 1)
-            PixmapIO.writePNG(Gdx.files.absolute(path), flipped, 6, true)
-            pixmap.dispose(); flipped.dispose()
+            PixmapIO.writePNG(Gdx.files.absolute(path), pixmap, 6, true)
+            pixmap.dispose()
             Gdx.app.exit()
         }
     }

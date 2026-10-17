@@ -22,7 +22,8 @@ class WireframeProjectorTest {
 
     @Test
     fun `coriolis seen from behind hides the slot`() {
-        val station = ShipInstance(Blueprints.CORIOLIS, Vector3(0f, 0f, 1000f), 0f) // fenda apontando para longe
+        val station = ShipInstance(Blueprints.CORIOLIS, Vector3(0f, 0f, 1000f), 0f)
+            .orient(Vector3(0f, 0f, 1f)) // fenda apontando para longe
         var slot = 0
         val sink = SegmentSink { x0, y0, x1, y1, _ ->
             // Arestas da fenda ficam a <= 10% do raio projetado em torno do centro.
@@ -41,6 +42,22 @@ class WireframeProjectorTest {
     }
 
     @Test
+    fun `very distant ship is drawn as a dot`() {
+        // Cobra: visibility distance 50 → vira ponto quando z/256 > 50.
+        val ship = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, 256f * 51f), 0f)
+        assertEquals(1, projector.project(ship, SegmentSink { _, _, _, _, _ -> }))
+    }
+
+    @Test
+    fun `rear view sees what is behind`() {
+        val ship = ShipInstance(Blueprints.CORIOLIS, Vector3(0f, 0f, -800f), 0f)
+        assertEquals(0, projector.project(ship, SegmentSink { _, _, _, _, _ -> }))
+        projector.view = com.eliteandroid.flight.View.REAR
+        assertTrue(projector.project(ship, SegmentSink { _, _, _, _, _ -> }) > 0)
+        projector.view = com.eliteandroid.flight.View.FRONT
+    }
+
+    @Test
     fun `ship behind the player is culled`() {
         val ship = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, -500f), 0f)
         assertEquals(0, projector.project(ship, SegmentSink { _, _, _, _, _ -> }))
@@ -48,8 +65,9 @@ class WireframeProjectorTest {
 
     @Test
     fun `far ships drop low-visibility detail edges`() {
-        val near = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, 300f), 0f) // traseira visível
-        val far = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, 3000f), 0f)
+        // Traseira visível (com os detalhes dos motores).
+        val near = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, 300f), 0f).orient(Vector3(0f, 0f, 1f))
+        val far = ShipInstance(Blueprints.COBRA_MK3, Vector3(0f, 0f, 3000f), 0f).orient(Vector3(0f, 0f, 1f))
         val nNear = projector.project(near, SegmentSink { _, _, _, _, _ -> })
         val nFar = projector.project(far, SegmentSink { _, _, _, _, _ -> })
         assertTrue(nFar < nNear, "near=$nNear far=$nFar")

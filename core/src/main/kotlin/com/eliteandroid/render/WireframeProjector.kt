@@ -1,6 +1,7 @@
 package com.eliteandroid.render
 
 import com.badlogic.gdx.math.Vector3
+import com.eliteandroid.flight.View
 import com.eliteandroid.ships.ShipInstance
 
 /** Destino dos segmentos 2D (em pixels, origem no canto inferior esquerdo). */
@@ -10,24 +11,25 @@ fun interface SegmentSink {
 
 /**
  * Projeta o wireframe de uma nave na tela, com a mesma lógica do LL9 do Elite:
+ *  0. PLUT: converte as coordenadas para a vista atual ([view]);
  *  1. faces visíveis = normal voltada para o observador (o jogador na origem);
- *  2. aresta desenhada se uma de suas faces for visível e se a nave estiver perto o
- *     bastante para o nível de detalhe da aresta;
- *  3. projeção em perspectiva x/z, y/z, com recorte no plano próximo.
+ *  2. distância XX4 = z/128 (0..31) se z < 4096; acima disso XX4 = 31 e, se z/256 passar
+ *     da "visibility distance" do modelo, a nave vira um ponto (SHPPT);
+ *  3. aresta desenhada se sua visibilidade ≥ XX4 e uma de suas faces for visível;
+ *  4. projeção x/z·256 + centro (LL9 parte 8), com recorte no plano próximo.
  *
- * Projeção: no BBC Elite a vista tem 256 px de largura e a projeção é x/z·256 a partir do
- * centro, o que dá ~53° de campo horizontal. Usamos a mesma razão: focal = largura da vista.
+ * Projeção: no BBC Elite a vista tem 256 px de largura → focal = largura da vista,
+ * ~53° de campo horizontal.
  */
 class WireframeProjector {
 
     var viewportWidth = 256f
     var viewportHeight = 192f
     var nearZ = 1f
-
-    /** Unidades de distância por nível de visibilidade das arestas (z_hi do original = z/256). */
-    var lodUnit = 256f
+    var view = View.FRONT
 
     private val camModel = Vector3()
+    private val viewPos = Vector3()
     private val tmp = Vector3()
     private var world = FloatArray(64 * 3)
     private var faceVisible = BooleanArray(32)
@@ -39,8 +41,18 @@ class WireframeProjector {
         val bp = ship.blueprint
         val pos = ship.position
 
+        view.toView(pos.x, pos.y, pos.z, viewPos)
         // Descarta naves inteiramente atrás do plano próximo.
-        if (pos.z + bp.boundingRadius < nearZ) return 0
+        if (viewPos.z + bp.boundingRadius < nearZ) return 0
+
+        // LL9 parte 2: distância para o nível de detalhe, ou ponto se estiver muito longe.
+        val xx4: Int
+        if (viewPos.z >= 4096f) {
+            if (viewPos.z / 256f > bp.visibilityDistance) return drawDot(viewPos, ship.color, sink)
+            xx4 = 31
+        } else {
+            xx4 = (viewPos.z / 128f).toInt().coerceAtLeast(0)
+        }
 
         // Posição do observador (origem) no referencial do modelo: Rᵀ·(0 − pos).
         tmp.set(pos).scl(-1f)
@@ -58,13 +70,13 @@ class WireframeProjector {
         if (world.size < bp.vertexCount * 3) world = FloatArray(bp.vertexCount * 3)
         for (v in 0 until bp.vertexCount) {
             ship.toWorld(bp.vertices[v * 3], bp.vertices[v * 3 + 1], bp.vertices[v * 3 + 2], tmp)
+            view.toView(tmp.x, tmp.y, tmp.z, tmp)
             world[v * 3] = tmp.x; world[v * 3 + 1] = tmp.y; world[v * 3 + 2] = tmp.z
         }
 
-        val lodLevel = (pos.len() / lodUnit).toInt()
         var count = 0
         for (e in 0 until bp.edgeCount) {
-            if (bp.edgeVisibility[e] < lodLevel) continue
+            if (bp.edgeVisibility[e] < xx4) continue
             val f1 = bp.edges[e * 4 + 2]; val f2 = bp.edges[e * 4 + 3]
             if (!faceVisible[f1] && !faceVisible[f2]) continue
             if (emit(bp.edges[e * 4], bp.edges[e * 4 + 1], ship.color, sink)) count++
@@ -91,7 +103,15 @@ class WireframeProjector {
         return true
     }
 
-    /** Projeta um ponto isolado (poeira estelar). Retorna false se estiver atrás do plano próximo. */
+    /** SHPPT: nave distante desenhada como um ponto. */
+    private fun drawDot(p: Vector3, color: Float, sink: SegmentSink): Int {
+        val sx = viewportWidth * 0.5f + p.x / p.z * focal
+        val sy = viewportHeight * 0.5f + p.y / p.z * focal
+        sink.segment(sx - 1f, sy, sx + 1f, sy, color)
+        return 1
+    }
+
+    /** Projeta um ponto isolado já no referencial da vista. Retorna false se estiver atrás do plano próximo. */
     fun projectPoint(x: Float, y: Float, z: Float, out: Vector3): Boolean {
         if (z < nearZ) return false
         out.set(viewportWidth * 0.5f + x / z * focal, viewportHeight * 0.5f + y / z * focal, z)
