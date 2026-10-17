@@ -253,6 +253,58 @@ e descontentamento, se a reputação com a facção local é baixa").
 - **Interface em Jetpack Compose** com Canvas para o mapa; sem motor 3D.
 - **Room/SQLite** apenas para os deltas do mundo vivido.
 
+### 10.1. Protótipo visual (conceito)
+
+As quatro telas abaixo são **maquetes de conceito** para dar uma noção do jogo. Não há
+código por trás delas, e nomes, números e textos são exemplos. O formato é retrato de
+celular (360 × 740 dp). Os arquivos-fonte (`.svg`) ficam em `docs/mercador/` e podem ser
+editados.
+
+**Regras visuais que as telas mostram**
+
+- Fundo quase preto, texto em cinza-claro; títulos em serifa, dados em monoespaçada.
+- **Uma cor por facção**, usada em todo lugar (mapa, cartões, reputação):
+  âmbar = Guilda Mercante, vermelho = Regime de Qube, violeta = Sínodo, verde-água = Cartel.
+- Vermelho também significa perigo (proibido, hostil, violência), por isso o vermelho do
+  Regime fica sempre ligado a esse sentido.
+- Os medidores (controle, descontentamento, abastecimento, sangue-frio, alavancagem) são
+  barras finas, sempre com rótulo e nunca só cor.
+- A voz interior e o livro de contas usam serifa em itálico, como anotações.
+
+**1. Mapa da galáxia: a mesa de inteligência**
+
+![Mapa da galáxia](mercador/01-mapa.png)
+
+Manchas de cor mostram a influência de cada facção. A linha tracejada é a rota planejada,
+o círculo vermelho tracejado é uma zona interditada, e o cartão de baixo resume o sistema
+selecionado (facção, traços, três medidores, risco da rota e um rumor).
+
+**2. Estação: mercado com consequências**
+
+![Estação e mercado](mercador/02-estacao.png)
+
+A ilustração 2D dá o clima da estação, e o menu fica por cima. Os preços mostram a
+tendência e o motivo ("escasso aqui", "racionado"). Mercadoria ilegal no local aparece
+marcada, mas continua lucrativa, e o porão mostra a **carga oculta**. A última linha do
+livro de contas aparece ali, para o jogador nunca esquecer o que fez.
+
+**3. Confronto: sem tiro, só pressão**
+
+![Confronto com a patrulha](mercador/03-confronto.png)
+
+O oponente é uma pessoa, com nome e doutrina. Os quatro medidores mostram a cena (sangue-
+frio e alavancagem dos dois lados). As opções são as posturas da seção 8, cada uma com seu
+custo escrito. A violência é a última opção, em vermelho, e avisa que é irreversível. A
+cena não pode ser pausada, para manter a tensão.
+
+**4. Livro de contas: quem você está se tornando**
+
+![Livro de contas](mercador/04-livro.png)
+
+Traços (alguns se dissipam, em tracejado), reputação por facção, entradas permanentes e
+**consequências em aberto**: aqui, a irmã de alguém que morreu no seu porão está a caminho.
+É a parte introspectiva do jogo.
+
 ## 11. Roteiro de construção
 
 Cada etapa já é jogável. Se a etapa 2 não for divertida, o resto não se salva; por isso
