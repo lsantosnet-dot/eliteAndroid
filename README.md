@@ -196,9 +196,6 @@ level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremul
 **Projeção:** a focal é altura × 256/192, o mesmo campo vertical do original (vista de
 256 × 192); a tela larga só amplia a visão lateral.
 
-Fora do escopo por enquanto: mis-jumps para o witchspace (0.78% dos saltos, com
-Thargoids).
-
 ## Naves inimigas e mísseis
 
 ![Combate](docs/combate.png)
@@ -225,6 +222,31 @@ mísseis, recompensa, contêineres, vértice do canhão, explosão).
   alvo; alvos com E.C.M. podem destruí-lo (6% por ciclo). Mísseis inimigos causam 250.
 - **Abates**: explosão (DOEXP), recompensa em créditos, contagem para a classificação
   (Harmless … Elite) e 50% de chance de soltar contêineres. Colisões: 128 + energia/2.
+
+## Witchspace e Thargoids
+
+![Witchspace](docs/witchspace.png)
+
+Em **0.78%** dos saltos (TT18: DORND ≥ 253) — ou sempre, segurando **CTRL** no
+desktop no instante do salto — o hiperespaço falha (MJP) e caímos no **witchspace**:
+
+- sem planeta, sol nem estação, e quase sem poeira estelar (NOSTM = 3);
+- o combustível do salto é gasto, e a posição na galáxia passa a ser a do sistema de
+  partida com os bits 0..5 do y invertidos — os mapas mostram esse ponto vazio, e o
+  destino continua escolhido;
+- surgem **4 Thargoids** (IA %11111111: agressividade máxima e E.C.M.), cada um com um
+  **Thargon** (GTHG); nada mais aparece depois disso;
+- abates contam para a classificação, mas **não há recompensas** no witchspace;
+- não dá para atracar nem fazer o salto "J", e usar a cápsula de fuga é **fatal**;
+- para sair, basta um hiperespaço normal (se ainda houver combustível) ou o
+  hiperpropulsor galáctico.
+
+Os modelos do Thargoid (disco octogonal, 20 vértices, 240 de energia, recompensa de
+50 Cr) e do Thargon (que no original reaproveita as arestas do contêiner) são extraídos
+do fonte. No TACTICS, o Thargoid nunca foge em cápsula e, em vez de mísseis, **lança
+Thargons** (até 6). Sem nenhum Thargoid por perto, os Thargons perdem o E.C.M. e ficam à
+deriva com metade da velocidade; com os coletores, viram **Alien Items**. No espaço
+normal, o caçador solitário do tipo 6 também pode ser um Thargoid (22%).
 
 ## Loja de equipamentos
 

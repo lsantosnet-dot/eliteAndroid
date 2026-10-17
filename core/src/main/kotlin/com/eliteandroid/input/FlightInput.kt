@@ -38,6 +38,8 @@ class FlightInput {
     var dockRequested = false
     var escapeRequested = false
     var galacticRequested = false
+    /** CTRL segurado (no salto, força a ida ao witchspace, como no original). */
+    var ctrlHeld = false
 
     fun poll() {
         val k = Gdx.input
@@ -69,6 +71,7 @@ class FlightInput {
             launchRequested = true; touch.launchRequest = false
         }
         val ctrl = k.isKeyPressed(Keys.CONTROL_LEFT) || k.isKeyPressed(Keys.CONTROL_RIGHT)
+        ctrlHeld = ctrl
         if ((k.isKeyJustPressed(Keys.H) && !ctrl) || touch.hyperspaceRequest) {
             hyperspaceRequested = true; touch.hyperspaceRequest = false
         }

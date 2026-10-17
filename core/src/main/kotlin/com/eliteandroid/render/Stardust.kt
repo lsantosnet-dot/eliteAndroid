@@ -24,6 +24,10 @@ class Stardust(val count: Int = 18) {
     var halfTanX = 0.8f
     var halfTanY = 0.375f
 
+    /** NOSTM: partículas em uso (o witchspace tem só 3). */
+    var active = count
+        set(value) { field = value.coerceIn(0, count) }
+
     fun reset(view: View) {
         for (i in 0 until count) respawn(i, view)
     }
@@ -39,7 +43,7 @@ class Stardust(val count: Int = 18) {
 
     /** Mesma transformação do MVEIT partes 5 e 6. */
     fun update(alpha: Float, beta: Float, distance: Float, view: View) {
-        for (i in 0 until count) {
+        for (i in 0 until active) {
             val k2 = y[i] - alpha * x[i]
             z[i] += beta * k2
             y[i] = k2 - beta * z[i]
@@ -55,7 +59,7 @@ class Stardust(val count: Int = 18) {
 
     fun draw(projector: WireframeProjector, batch: NeonLineBatch) {
         val view = projector.view
-        for (i in 0 until count) {
+        for (i in 0 until active) {
             view.toView(x[i], y[i], z[i], tmp)
             val d = tmp.z
             if (!projector.projectPoint(tmp.x, tmp.y, d, tmp)) continue

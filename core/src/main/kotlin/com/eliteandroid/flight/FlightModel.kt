@@ -70,12 +70,18 @@ class FlightModel {
     /** Contagem regressiva do hiperespaço (QQ22). */
     val hyperspace = HyperspaceCountdown()
 
+    /** MJ: estamos no witchspace (sem planeta, sol nem estação; só Thargoids). */
+    var witchspace = false
+        private set
+
     /**
      * TT110: sai da estação — ela fica logo atrás (z = −256) com a fenda voltada para nós,
      * e o planeta à frente (SOS1 com z_sign = 1, ou seja z = 65536). Não há sol.
      */
     fun launch(system: PlanetSystem? = null) {
         ships.clear()
+        witchspace = false
+        dust.active = dust.count
         combat.reset()
         system?.let { combat.government = it.governmentCode }
         playerDestroyed = false
@@ -102,6 +108,8 @@ class FlightModel {
      */
     fun arrive(system: PlanetSystem) {
         ships.clear()
+        witchspace = false
+        dust.active = dust.count
         station = null
         combat.reset()
         combat.government = system.governmentCode
@@ -125,6 +133,27 @@ class FlightModel {
     }
 
     /**
+     * MJP: o salto falhou e caímos no witchspace, entre as estrelas. Não há planeta, sol nem
+     * estação, a poeira estelar quase some (NOSTM = 3) e surgem 4 Thargoids, cada um com um
+     * Thargon (GTHG). O status legal não é reduzido (não há SOLAR).
+     */
+    fun enterWitchspace() {
+        ships.clear()
+        station = null
+        planet = null
+        sun = null
+        combat.reset()
+        playerDestroyed = false
+        witchspace = true
+        while (ships.count { it.type == ShipType.THARGOID } < 4) combat.spawnThargoid()
+        player.resetAfterJump()
+        hyperspace.cancel()
+        dust.active = 3
+        view = View.FRONT
+        dust.reset(view)
+    }
+
+    /**
      * WARP ("J"): salto dentro do sistema — aproxima planeta e sol em 65536 (z_sign − 1).
      * Recusado se houver estação ou naves por perto, ou se o planeta/sol à frente já estiver
      * a menos de 2 unidades de sign (131072) em todos os eixos.
@@ -132,7 +161,7 @@ class FlightModel {
     fun inSystemJump(): Boolean {
         // Asteroides, contêineres e cápsulas não impedem o salto; qualquer outra nave, sim.
         val junk = setOf(ShipType.ASTEROID, ShipType.CANISTER, ShipType.ESCAPE_POD)
-        if (station != null || ships.any { !it.killed && it.type !in junk }) return false
+        if (witchspace || station != null || ships.any { !it.killed && it.type !in junk }) return false
         for (body in listOfNotNull(planet, sun)) {
             val p = body.position
             if (p.z >= 0f && maxSign(p) < 2) return false

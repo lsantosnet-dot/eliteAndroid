@@ -207,7 +207,8 @@ class Combat(private val model: FlightModel) {
         if (byUs) model.player.kills++
         if (ship.type == ShipType.VIPER) model.player.legalStatus = model.player.legalStatus or 64
         val bounty = ship.blueprint.bounty
-        if (bounty > 0) {
+        // q2: no witchspace não há recompensas.
+        if (bounty > 0 && !model.witchspace) {
             onBounty(bounty)
             messages += "BOUNTY %d.%d CR".format(bounty / 10, bounty % 10)
         }
@@ -239,9 +240,14 @@ class Combat(private val model: FlightModel) {
             if (ship.killed || ship.type == ShipType.STATION || ship.type == ShipType.MISSILE) continue
             val p = ship.position
             if (abs(p.x) >= 64f || abs(p.y) >= 64f || abs(p.z) >= 64f) continue
-            val scoopable = ship.type == ShipType.CANISTER || ship.type == ShipType.ESCAPE_POD
+            // Tipos ≥ OIL: contêiner, Thargon (vira "Alien Items") e cápsula de fuga (escravos).
+            val scoopable = ship.type == ShipType.CANISTER || ship.type == ShipType.THARGON || ship.type == ShipType.ESCAPE_POD
             if (scoopable && model.player.fuelScoops && p.y < 0f) {
-                val item = if (ship.type == ShipType.ESCAPE_POD) 3 else dornd() and 7
+                val item = when (ship.type) {
+                    ShipType.ESCAPE_POD -> 3
+                    ShipType.THARGON -> Commodities.ALIEN_ITEMS
+                    else -> dornd() and 7
+                }
                 if (onScoop(item)) {
                     model.ships.remove(ship)
                     messages += Commodities.ALL[item].name.uppercase()
@@ -261,6 +267,7 @@ class Combat(private val model: FlightModel) {
 
     /** Loop principal do jogo, partes 2 e 3 (chamado quando MCNT dá a volta, a cada 256). */
     fun spawnCheck() {
+        if (model.witchspace) return // no witchspace nada novo aparece
         val ships = model.ships
         val safeZone = model.station != null
         // Parte 2: 13% de chance de algo inofensivo (com menos de 3 asteroides por perto).
@@ -317,13 +324,26 @@ class Combat(private val model: FlightModel) {
                 model.addShip(ShipInstance(type, Vector3(pos2)).also { it.aiFlag = ai2 })
             }
         } else {
-            // Caçador solitário: Mamba, Python ou Cobra (o Thargoid fica para o witchspace).
+            // Caçador solitário: Mamba, Python ou Cobra; o tipo 6 é um Thargoid (tha: 22%).
             extraVesselDelay++
-            val type = when ((a2 and 3) + 3) { 3 -> ShipType.MAMBA; 4 -> ShipType.PYTHON; 5 -> ShipType.COBRA_HUNTER; else -> return }
+            val type = when ((a2 and 3) + 3) {
+                3 -> ShipType.MAMBA; 4 -> ShipType.PYTHON; 5 -> ShipType.COBRA_HUNTER
+                else -> { if (dornd() >= 200) spawnThargoid(); return }
+            }
             val x = dornd()
             val ai = (((x shl 1) or (if (x >= 200) 1 else 0)) or 0xC0) and 0xFF
             model.addShip(ShipInstance(type, pos2).also { it.aiFlag = ai })
         }
+    }
+
+    /**
+     * GTHG: um Thargoid (IA %11111111: agressividade máxima e E.C.M.) numa posição do Ze,
+     * acompanhado de um Thargon.
+     */
+    fun spawnThargoid() {
+        val (pos, _, _) = ze()
+        model.addShip(ShipInstance(ShipType.THARGOID, Vector3(pos)).also { it.aiFlag = 0xFF })
+        model.addShip(ShipInstance(ShipType.THARGON, Vector3(pos)).also { it.aiFlag = 0xFF })
     }
 
     /** Ze: nave agressiva em (±8192, ±8192, 8192), IA = %11000000 + E.C.M. em 4%. */
@@ -361,6 +381,12 @@ class Combat(private val model: FlightModel) {
                 spawnChild(ship, ShipType.VIPER, 0b11110001)
                 return
             }
+            ShipType.THARGON -> if (model.ships.none { it.type == ShipType.THARGOID && !it.killed }) {
+                // TA13: sem a nave-mãe, o Thargon perde o E.C.M. e fica à deriva com metade da velocidade.
+                ship.aiFlag = ship.aiFlag and 0xFE
+                ship.speed /= 2f
+                return
+            }
             else -> Unit
         }
         // Na zona segura, piratas e caçadores perdem a agressividade.
@@ -378,7 +404,7 @@ class Combat(private val model: FlightModel) {
 
         val maxE = ship.blueprint.maxEnergy.toFloat()
         if (ship.energy <= maxE / 2f) {
-            if (ship.energy <= maxE / 8f && dornd() >= 230) {
+            if (ship.energy <= maxE / 8f && dornd() >= 230 && ship.type != ShipType.THARGOID) {
                 // Quase sem energia: abandona a nave numa cápsula de fuga (SESCP).
                 ship.aiFlag = 0
                 spawnChild(ship, ShipType.ESCAPE_POD, 0x80)
@@ -387,8 +413,13 @@ class Combat(private val model: FlightModel) {
             // ta3: dispara um míssil, mais provável quanto mais mísseis tiver.
             if (ship.missiles > 0 && (dornd() and 31) < ship.missiles && !ecmActive) {
                 ship.missiles--
-                spawnChild(ship, ShipType.MISSILE, 0b11000000, hostileToUs = true)
-                messages += "INCOMING MISSILE"
+                if (ship.type == ShipType.THARGOID) {
+                    // O Thargoid lança um Thargon em vez de um míssil.
+                    spawnChild(ship, ShipType.THARGON, ship.aiFlag)
+                } else {
+                    spawnChild(ship, ShipType.MISSILE, 0b11000000, hostileToUs = true)
+                    messages += "INCOMING MISSILE"
+                }
             }
         }
 

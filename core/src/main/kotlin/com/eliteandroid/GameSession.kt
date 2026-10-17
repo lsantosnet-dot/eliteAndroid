@@ -66,6 +66,27 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     /** Sistema escolhido para o hiperespaço (QQ9/QQ10 do original). */
     @Volatile var hyperspaceTarget: PlanetSystem? = null
 
+    /**
+     * Witchspace (MJ): coordenadas galácticas onde caímos num salto que falhou — as do
+     * sistema de partida com os bits 0..5 do y invertidos. Null no espaço normal.
+     */
+    @Volatile var witchspace: IntArray? = null
+        private set
+    val inWitchspace: Boolean get() = witchspace != null
+
+    /** Posição galáctica atual (o sistema atual, ou o ponto do witchspace). */
+    val positionX: Int get() = witchspace?.get(0) ?: currentSystem.x
+    val positionY: Int get() = witchspace?.get(1) ?: currentSystem.y
+
+    /** Distância (décimos de LY) da posição atual até [s]. */
+    fun distanceTo(s: PlanetSystem): Int = GalaxyGenerator.distance(positionX, positionY, s.x, s.y)
+
+    /** [s] é o sistema onde estamos (no witchspace, nenhum é). */
+    fun isHere(s: PlanetSystem): Boolean = !inWitchspace && s.index == currentSystem.index
+
+    /** Força o próximo salto a falhar (CTRL segurado na hora do salto, como no original). */
+    @Volatile var forceMisjump = false
+
     /** A contagem em andamento é do hiperpropulsor galáctico. */
     private var galacticJump = false
 
@@ -105,7 +126,10 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
                     FlightEvent.DOCKED -> enter(State.DOCKING)
                     FlightEvent.CRASHED -> enter(State.DESTROYED)
                     FlightEvent.BUMPED -> flash("BUMP")
-                    FlightEvent.HYPERSPACE -> enter(State.HYPERSPACE)
+                    FlightEvent.HYPERSPACE -> {
+                        if (input.ctrlHeld) forceMisjump = true // TT18: CTRL força o mis-jump
+                        enter(State.HYPERSPACE)
+                    }
                     FlightEvent.STATION_APPEARED -> flash("SPACE STATION")
                     FlightEvent.NONE -> Unit
                 }
@@ -142,10 +166,15 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
             return true
         }
         if (input.escapeRequested && p.escapePod) {
-            escapePod()
+            ejectPod()
             return true
         }
         return false
+    }
+
+    /** ESC: lança a cápsula de fuga — no witchspace isso é fatal (DEATH). */
+    internal fun ejectPod() {
+        if (inWitchspace) enter(State.DESTROYED) else escapePod()
     }
 
     /**
@@ -180,14 +209,15 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     }
 
     /**
-     * TT18: gasta o combustível da distância, troca de sistema, sorteia o QQ26 do novo
-     * mercado (GVL) e monta planeta e sol (SOLAR). (Os mis-jumps para o witchspace, 0.78%
-     * dos saltos, ficam para depois — eles levam a combates com Thargoids.)
+     * TT18: gasta o combustível da distância e, em 0.78% dos saltos (DORND ≥ 253, ou com
+     * CTRL segurado), cai no witchspace (MJP); senão troca de sistema, sorteia o QQ26 do
+     * novo mercado (GVL) e monta planeta e sol (SOLAR).
      */
     @Synchronized private fun arrive() {
         if (galacticJump) {
             galacticJump = false
             galaxy = GalaxyGenerator.buildGalaxy(galaxy.number % 8 + 1)
+            witchspace = null
             val target = galaxy.nearestTo(96, 96)
             currentSystem = target
             market = Market(target, fluct = kotlin.random.Random.nextInt(256))
@@ -199,8 +229,16 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         }
         val target = hyperspaceTarget
         if (target != null) {
-            val distance = GalaxyGenerator.distance(currentSystem, target)
+            val distance = distanceTo(target)
             model.player.fuel = (model.player.fuel - distance).coerceAtLeast(0f)
+            if (forceMisjump || kotlin.random.Random.nextInt(256) >= 253) {
+                forceMisjump = false
+                witchspace = intArrayOf(positionX, positionY xor 0b11111)
+                model.enterWitchspace()
+                enter(State.FLYING)
+                return
+            }
+            witchspace = null
             currentSystem = target
             market = Market(target, fluct = kotlin.random.Random.nextInt(256))
             hyperspaceTarget = null
@@ -226,6 +264,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
 
     /** Morte: recarrega o último comandante salvo, ou JAMESON se não houver. */
     @Synchronized private fun restartCommander() {
+        witchspace = null
         if (!loadSaved()) resetToJameson()
         enter(State.DOCKED)
     }
@@ -269,6 +308,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     @Synchronized fun loadSaved(): Boolean {
         val s = CommanderSave.decode(storage.read()) ?: return false
         if (s.galaxy != galaxy.number) galaxy = GalaxyGenerator.buildGalaxy(s.galaxy)
+        witchspace = null
         val here = galaxy[s.system]
         commander.restore(s.cash, s.cargo, s.cargoCapacity)
         currentSystem = here
@@ -294,6 +334,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
 
     /** NEW GAME: apaga o arquivo e recomeça como JAMESON em Lave. */
     @Synchronized fun newGame() {
+        witchspace = null
         storage.clear()
         resetToJameson()
         enter(State.DOCKED)
@@ -341,8 +382,8 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     private fun requestHyperspace() {
         if (model.hyperspace.active) return
         val target = hyperspaceTarget
-        if (target == null || target.index == currentSystem.index) { flash("NO TARGET"); return }
-        val distance = GalaxyGenerator.distance(currentSystem, target)
+        if (target == null || isHere(target)) { flash("NO TARGET"); return }
+        val distance = distanceTo(target)
         if (distance > model.player.fuel) { flash("RANGE?"); return }
         model.hyperspace.start()
         flash("HYPERSPACE - ${target.name}")
@@ -350,6 +391,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
 
     /** Pula direto para o voo (capturas de tela e testes). */
     fun launchNow() {
+        witchspace = null
         model.launch(currentSystem)
         enter(State.FLYING)
     }

@@ -11,12 +11,14 @@ enum class ShipType(val id: Int, val blueprint: ShipBlueprint, rgb: Int) {
     VIPER(2, OriginalShips.VIPER, 0x4C8CFF),          // COPS: polícia
     MAMBA(3, OriginalShips.MAMBA, 0xFF4040),
     PYTHON(4, OriginalShips.PYTHON, 0xFF7A30),
+    THARGOID(6, OriginalShips.THARGOID, 0x9CFF30),    // THG
     COBRA_HUNTER(5, Blueprints.COBRA_MK3, 0xFFB030),  // caçador de recompensas
     COBRA_TRADER(7, Blueprints.COBRA_MK3, 0x40FF90),  // CYL: comerciante
     STATION(8, Blueprints.CORIOLIS, 0x1AD9FF),        // SST
     MISSILE(9, OriginalShips.MISSILE, 0xFFF060),      // MSL
     ASTEROID(10, OriginalShips.ASTEROID, 0x9A9AB0),   // AST
     CANISTER(11, OriginalShips.CANISTER, 0xFFE080),   // OIL
+    THARGON(12, OriginalShips.THARGON, 0x70D040),     // TGL
     ESCAPE_POD(13, OriginalShips.ESCAPE_POD, 0xC0C0FF); // ESC
 
     /** Cor neon (empacotada) usada no wireframe e no radar. */

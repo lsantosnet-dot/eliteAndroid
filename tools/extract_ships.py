@@ -3,7 +3,7 @@
 #   python3 tools/extract_ships.py elite-source.asm core/src/main/kotlin/com/eliteandroid/ships/OriginalShips.kt
 import re, sys
 src = open(sys.argv[1]).read().split('\n')
-ships = ['SIDEWINDER','VIPER','MAMBA','PYTHON','MISSILE','ASTEROID','CANISTER','ESCAPE_POD','COBRA_MK_3','CORIOLIS']
+ships = ['SIDEWINDER','VIPER','MAMBA','PYTHON','MISSILE','ASTEROID','CANISTER','ESCAPE_POD','THARGOID','THARGON','COBRA_MK_3','CORIOLIS']
 out = []
 def block(name):
     start = src.index('.SHIP_'+name)
@@ -25,6 +25,10 @@ for name in ships:
         if m2: hdr['Missiles'] = m2.group(1)
     v = [list(map(int, re.findall(r'-?\d+', l.split('\\')[0].replace('VERTEX','')))) for l in L if l.strip().startswith('VERTEX')]
     e = [list(map(int, re.findall(r'-?\d+', l.split('\\')[0].replace('EDGE','')))) for l in L if l.strip().startswith('EDGE')]
+    if not e:
+        # O Thargon reaproveita as arestas de outro modelo (o contêiner, mesma topologia).
+        other = next(re.search(r'SHIP_(\w+?)_EDGES', l).group(1) for l in L if '_EDGES' in l)
+        e = [list(map(int, re.findall(r'-?\d+', l.split('\\')[0].replace('EDGE','')))) for l in block(other) if l.strip().startswith('EDGE')]
     byte19 = None
     for l in L:
         if 'Laser power' in l:

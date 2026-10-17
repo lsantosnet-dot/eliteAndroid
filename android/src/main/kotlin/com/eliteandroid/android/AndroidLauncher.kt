@@ -20,7 +20,6 @@ import com.eliteandroid.GameSession
 import com.eliteandroid.android.ui.ChartView
 import com.eliteandroid.android.ui.FlightControlsOverlay
 import com.eliteandroid.android.ui.StationPanel
-import com.eliteandroid.galaxy.GalaxyGenerator
 import java.util.Locale
 
 /**
@@ -138,10 +137,11 @@ class AndroidLauncher : AndroidApplication() {
     private fun toggleData() {
         if (dataView.visibility == View.VISIBLE) { dataView.visibility = View.GONE; return }
         val sess = game.sessionOrNull ?: return
-        val here = sess.currentSystem
-        val shown = sess.hyperspaceTarget ?: here
+        val target = sess.hyperspaceTarget
+        val shown = target ?: sess.currentSystem.takeUnless { sess.inWitchspace }
         dataView.text = buildString {
-            if (shown !== here) appendLine("Distance: %.1f Light Years".format(Locale.US, GalaxyGenerator.distance(here, shown) / 10.0))
+            if (shown == null) { append("WITCHSPACE\n\nNo system data in witchspace."); return@buildString }
+            if (!sess.isHere(shown)) appendLine("Distance: %.1f Light Years".format(Locale.US, sess.distanceTo(shown) / 10.0))
             append(shown.dataScreen())
         }
         dataView.visibility = View.VISIBLE

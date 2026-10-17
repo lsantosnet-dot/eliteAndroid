@@ -8,8 +8,6 @@ import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.View
 import com.eliteandroid.GameSession
-import com.eliteandroid.galaxy.GalaxyGenerator
-import com.eliteandroid.galaxy.PlanetSystem
 import java.util.Locale
 
 /**
@@ -54,13 +52,14 @@ class ChartView(context: Context, private val session: () -> GameSession?) : Vie
     private fun sy(vy: Float) = area.centerY() + (vy - vh / 2f) * scale
 
     /** Coordenadas virtuais de um sistema (relativas ao atual no mapa curto). */
-    private fun virtualX(s: PlanetSystem, here: PlanetSystem) = if (longRange) s.x.toFloat() else 104f + (s.x - here.x) * 4f
-    private fun virtualY(s: PlanetSystem, here: PlanetSystem) = if (longRange) s.y / 2f else 84f + (s.y - here.y) * 2f
+    private fun virtualX(x: Int, hereX: Int) = if (longRange) x.toFloat() else 104f + (x - hereX) * 4f
+    private fun virtualY(y: Int, hereY: Int) = if (longRange) y / 2f else 84f + (y - hereY) * 2f
 
     override fun onDraw(canvas: Canvas) {
         val sess = session() ?: return
         layoutArea()
-        val here = sess.currentSystem
+        // No witchspace, o centro é o ponto onde caímos (entre os sistemas).
+        val hereX = sess.positionX; val hereY = sess.positionY
         val target = sess.hyperspaceTarget
         val fuel = sess.model.player.fuel
         val d = style.density
@@ -69,7 +68,7 @@ class ChartView(context: Context, private val session: () -> GameSession?) : Vie
             width / 2f, 14f * d, NeonStyle.CYAN, 14f)
         style.rect(canvas, area, NeonStyle.DIM, 1.5f * d, 2f * d)
 
-        val hx = sx(virtualX(here, here)); val hy = sy(virtualY(here, here))
+        val hx = sx(virtualX(hereX, hereX)); val hy = sy(virtualY(hereY, hereY))
         // Círculo de combustível (TT14) e mira no sistema atual.
         val fuelR = (if (longRange) fuel / 4f else fuel) * scale
         style.circle(canvas, hx, hy, fuelR, NeonStyle.GREEN, 1.5f * d)
@@ -79,9 +78,9 @@ class ChartView(context: Context, private val session: () -> GameSession?) : Vie
         canvas.save()
         canvas.clipRect(area)
         for (s in sess.galaxy.systems) {
-            if (!longRange && (kotlin.math.abs(s.x - here.x) >= 20 || kotlin.math.abs(s.y - here.y) >= 38)) continue
-            val x = sx(virtualX(s, here)); val y = sy(virtualY(s, here))
-            val inRange = GalaxyGenerator.distance(here, s) <= fuel
+            if (!longRange && (kotlin.math.abs(s.x - hereX) >= 20 || kotlin.math.abs(s.y - hereY) >= 38)) continue
+            val x = sx(virtualX(s.x, hereX)); val y = sy(virtualY(s.y, hereY))
+            val inRange = sess.distanceTo(s) <= fuel
             star.color = if (inRange) NeonStyle.YELLOW else NeonStyle.DIM
             val r = if (longRange) 1.2f * d else (2 + (s.seed.s2Hi and 1)) * scale * 0.9f
             canvas.drawCircle(x, y, r, star)
@@ -94,10 +93,10 @@ class ChartView(context: Context, private val session: () -> GameSession?) : Vie
 
         // Mira do destino (TT103).
         if (target != null) {
-            val tx = sx(virtualX(target, here)); val ty = sy(virtualY(target, here))
+            val tx = sx(virtualX(target.x, hereX)); val ty = sy(virtualY(target.y, hereY))
             cross(canvas, tx, ty, 14f * d, NeonStyle.MAGENTA)
             style.circle(canvas, tx, ty, 7f * d, NeonStyle.MAGENTA, 1.5f * d)
-            val dist = GalaxyGenerator.distance(here, target)
+            val dist = sess.distanceTo(target)
             val txt = String.format(Locale.US, "%s   %.1f LIGHT YEARS%s", target.name, dist / 10f,
                 if (dist > fuel) "   (OUT OF RANGE)" else "")
             style.label(canvas, txt, width / 2f, height - 14f * d, if (dist > fuel) NeonStyle.RED else NeonStyle.MAGENTA, 13f)
@@ -116,14 +115,13 @@ class ChartView(context: Context, private val session: () -> GameSession?) : Vie
         if (e.actionMasked != MotionEvent.ACTION_DOWN && e.actionMasked != MotionEvent.ACTION_MOVE) return true
         val sess = session() ?: return true
         layoutArea()
-        val here = sess.currentSystem
         val vx = (e.x - area.centerX()) / scale + vw / 2f
         val vy = (e.y - area.centerY()) / scale + vh / 2f
         val gx: Int; val gy: Int
         if (longRange) { gx = vx.toInt(); gy = (vy * 2f).toInt() }
-        else { gx = here.x + ((vx - 104f) / 4f).toInt(); gy = here.y + ((vy - 84f) / 2f).toInt() }
+        else { gx = sess.positionX + ((vx - 104f) / 4f).toInt(); gy = sess.positionY + ((vy - 84f) / 2f).toInt() }
         val chosen = sess.galaxy.nearestTo(gx.coerceIn(0, 255), gy.coerceIn(0, 255))
-        sess.hyperspaceTarget = if (chosen.index == here.index) null else chosen
+        sess.hyperspaceTarget = if (sess.isHere(chosen)) null else chosen
         invalidate()
         return true
     }

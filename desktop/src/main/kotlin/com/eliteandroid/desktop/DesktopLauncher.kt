@@ -20,7 +20,8 @@ import com.eliteandroid.flight.View
  * [--view] (front, rear, left, right). [--fire] captura com o laser disparando,
  * [--arrive NOME] chega pelo hiperespaço nesse sistema, [--jumps N] dá N saltos "J" e
  * [--docked] fotografa a tela de atracado; [--beam] instala um laser de feixe na frente e
- * [--bomb] detona a bomba de energia (com [--combat], no meio da batalha):
+ * [--bomb] detona a bomba de energia (com [--combat], no meio da batalha) e
+ * [--witchspace] força um mis-jump (para o destino de [--arrive], ou Diso):
  *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
 fun main(args: Array<String>) {
@@ -38,6 +39,7 @@ fun main(args: Array<String>) {
         combat = "--combat" in args,
         beam = "--beam" in args,
         bomb = "--bomb" in args,
+        witchspace = "--witchspace" in args,
     )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
@@ -72,6 +74,7 @@ private class ShotSpec(
     val combat: Boolean,
     val beam: Boolean,
     val bomb: Boolean,
+    val witchspace: Boolean,
 )
 
 /** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
@@ -86,7 +89,14 @@ private class ScreenshotWrapper(
         if (frames == 0 && !shot.docked) {
             val session = game.session
             val target = shot.arrive?.let { session.galaxy.findByName(it) }
-            if (target != null) session.arriveNow(target) else session.launchNow()
+            if (shot.witchspace) {
+                session.forceMisjump = true
+                session.arriveNow(target ?: session.galaxy.findByName("DISO")!!)
+                // Para a foto: um Thargoid e seu Thargon à frente, vindo em nossa direção.
+                val ships = session.model.ships
+                ships[0].position.set(-250f, 120f, 2600f); ships[0].setOrientation(com.badlogic.gdx.math.Vector3(0.8f, -0.35f, -0.5f))
+                ships[1].position.set(420f, -60f, 1500f); ships[1].setOrientation(com.badlogic.gdx.math.Vector3(-0.5f, 0.2f, -1f))
+            } else if (target != null) session.arriveNow(target) else session.launchNow()
             repeat(shot.jumps) { session.model.inSystemJump() }
             if (shot.combat) stageCombat(session.model)
             if (shot.beam) session.model.player.lasers[0] = com.eliteandroid.flight.PlayerShip.BEAM_LASER

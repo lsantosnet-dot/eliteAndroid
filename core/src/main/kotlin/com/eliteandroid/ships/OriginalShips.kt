@@ -310,4 +310,87 @@ object OriginalShips {
         edge(3, 1, 2, 0, 31) // 5
     }
 
+    val THARGOID: ShipBlueprint = ShipBlueprint.define("Thargoid") {
+        stats(energy = 240, speed = 39, laserByte = 22, bounty = 500, canisters = 0, gunVertex = 15, explosionVertices = 8)
+        visibilityDistance = 55
+        targetableArea = 9801
+        vertex(32, -48, 48) // 0
+        vertex(32, -68, 0) // 1
+        vertex(32, -48, -48) // 2
+        vertex(32, 0, -68) // 3
+        vertex(32, 48, -48) // 4
+        vertex(32, 68, 0) // 5
+        vertex(32, 48, 48) // 6
+        vertex(32, 0, 68) // 7
+        vertex(-24, -116, 116) // 8
+        vertex(-24, -164, 0) // 9
+        vertex(-24, -116, -116) // 10
+        vertex(-24, 0, -164) // 11
+        vertex(-24, 116, -116) // 12
+        vertex(-24, 164, 0) // 13
+        vertex(-24, 116, 116) // 14
+        vertex(-24, 0, 164) // 15
+        vertex(-24, 64, 80) // 16
+        vertex(-24, 64, -80) // 17
+        vertex(-24, -64, -80) // 18
+        vertex(-24, -64, 80) // 19
+        edge(0, 7, 4, 8, 31) // 0
+        edge(0, 1, 0, 4, 31) // 1
+        edge(1, 2, 1, 4, 31) // 2
+        edge(2, 3, 2, 4, 31) // 3
+        edge(3, 4, 3, 4, 31) // 4
+        edge(4, 5, 4, 5, 31) // 5
+        edge(5, 6, 4, 6, 31) // 6
+        edge(6, 7, 4, 7, 31) // 7
+        edge(0, 8, 0, 8, 31) // 8
+        edge(1, 9, 0, 1, 31) // 9
+        edge(2, 10, 1, 2, 31) // 10
+        edge(3, 11, 2, 3, 31) // 11
+        edge(4, 12, 3, 5, 31) // 12
+        edge(5, 13, 5, 6, 31) // 13
+        edge(6, 14, 6, 7, 31) // 14
+        edge(7, 15, 7, 8, 31) // 15
+        edge(8, 15, 8, 9, 31) // 16
+        edge(8, 9, 0, 9, 31) // 17
+        edge(9, 10, 1, 9, 31) // 18
+        edge(10, 11, 2, 9, 31) // 19
+        edge(11, 12, 3, 9, 31) // 20
+        edge(12, 13, 5, 9, 31) // 21
+        edge(13, 14, 6, 9, 31) // 22
+        edge(14, 15, 7, 9, 31) // 23
+        edge(16, 17, 9, 9, 30) // 24
+        edge(18, 19, 9, 9, 30) // 25
+    }
+
+    val THARGON: ShipBlueprint = ShipBlueprint.define("Thargon") {
+        stats(energy = 20, speed = 30, laserByte = 16, bounty = 50, canisters = 0, gunVertex = 0, explosionVertices = 3)
+        visibilityDistance = 20
+        targetableArea = 1600
+        vertex(-9, 0, 40) // 0
+        vertex(-9, -38, 12) // 1
+        vertex(-9, -24, -32) // 2
+        vertex(-9, 24, -32) // 3
+        vertex(-9, 38, 12) // 4
+        vertex(9, 0, -8) // 5
+        vertex(9, -10, -15) // 6
+        vertex(9, -6, -26) // 7
+        vertex(9, 6, -26) // 8
+        vertex(9, 10, -15) // 9
+        edge(0, 1, 0, 1, 31) // 0
+        edge(1, 2, 0, 2, 31) // 1
+        edge(2, 3, 0, 3, 31) // 2
+        edge(3, 4, 0, 4, 31) // 3
+        edge(0, 4, 0, 5, 31) // 4
+        edge(0, 5, 1, 5, 31) // 5
+        edge(1, 6, 1, 2, 31) // 6
+        edge(2, 7, 2, 3, 31) // 7
+        edge(3, 8, 3, 4, 31) // 8
+        edge(4, 9, 4, 5, 31) // 9
+        edge(5, 6, 1, 6, 31) // 10
+        edge(6, 7, 2, 6, 31) // 11
+        edge(7, 8, 3, 6, 31) // 12
+        edge(8, 9, 4, 6, 31) // 13
+        edge(9, 5, 5, 6, 31) // 14
+    }
+
 }

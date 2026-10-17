@@ -139,9 +139,12 @@ object GalaxyGenerator {
      * Distância entre dois sistemas em décimos de ano-luz (70 = 7.0 LY),
      * porte exato de `distance()` de Text Elite — inclusive a divisão inteira de dy²/4.
      */
-    fun distance(a: PlanetSystem, b: PlanetSystem): Int {
-        val dx = a.x - b.x
-        val dy = a.y - b.y
+    fun distance(a: PlanetSystem, b: PlanetSystem): Int = distance(a.x, a.y, b.x, b.y)
+
+    /** A mesma distância entre coordenadas galácticas (o witchspace fica fora dos sistemas). */
+    fun distance(ax: Int, ay: Int, bx: Int, by: Int): Int {
+        val dx = ax - bx
+        val dy = ay - by
         val sq = dx * dx + (dy * dy) / 4
         return floor(4.0 * sqrt(sq.toDouble()) + 0.5).toInt() // ftoi()
     }
