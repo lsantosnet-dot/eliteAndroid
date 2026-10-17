@@ -14,9 +14,9 @@ import com.eliteandroid.flight.View as SpaceDirection
  * Interface touch de voo (Views Android sobre a superfície LibGDX):
  *
  *  - manche flutuante na esquerda (rolagem/arfagem);
- *  - acelerador vertical na borda direita, FIRE (segurar) e HYPER acima dele;
- *  - câmeras F/R/L/D no canto superior direito;
- *  - LAUNCH no centro quando atracado.
+ *  - acelerador vertical na borda direita, FIRE (segurar), HYPER e JUMP acima dele;
+ *  - câmeras F/R/L/D no canto superior direito.
+ * (Atracado, quem aparece é o [StationPanel].)
  *
  * Tudo escreve em [com.eliteandroid.input.TouchControls] (thread-safe) e o estado do jogo
  * é lido a cada 100 ms para mostrar/esconder controles e atualizar mostradores.
@@ -48,17 +48,18 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         onClick = { touch?.hyperspaceRequest = true },
     )
 
+    /** WARP ("J"): salto dentro do sistema em direção ao planeta. */
+    private val jump = NeonButton(
+        context, "JUMP", NeonStyle.CYAN, round = false, textSizeDp = 12f,
+        onClick = { touch?.jumpRequest = true },
+    )
+
     private val viewButtons = SpaceDirection.entries.map { dir ->
         NeonButton(context, VIEW_LABELS[dir.ordinal], NeonStyle.GREEN, round = false, textSizeDp = 14f,
             onClick = { touch?.viewRequest = dir })
     }
 
-    private val launch = NeonButton(
-        context, "LAUNCH", NeonStyle.GREEN, round = false, textSizeDp = 18f,
-        onClick = { touch?.launchRequest = true },
-    )
-
-    private val flightControls = listOf<View>(joystick, throttle, fire, hyper)
+    private val flightControls = listOf<View>(joystick, throttle, fire, hyper, jump)
     private val viewRow = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         viewButtons.forEach { addView(it, LinearLayout.LayoutParams(dp(52f), dp(52f))) }
@@ -84,12 +85,13 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         addView(hyper, LayoutParams(dp(92f), dp(48f), Gravity.END or Gravity.BOTTOM).apply {
             marginEnd = dp(82f); bottomMargin = dp(128f)
         })
+        addView(jump, LayoutParams(dp(92f), dp(48f), Gravity.END or Gravity.BOTTOM).apply {
+            marginEnd = dp(82f); bottomMargin = dp(182f)
+        })
         addView(viewRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.TOP).apply {
             topMargin = dp(6f); marginEnd = dp(6f)
         })
-        addView(launch, LayoutParams(dp(220f), dp(68f), Gravity.CENTER).apply { topMargin = dp(120f) })
         setFlightControlsVisible(false)
-        launch.visibility = View.GONE
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -120,7 +122,6 @@ class FlightControlsOverlay(context: Context, private val game: EliteGame) : Fra
         if (state != lastState) {
             val flying = state == GameSession.State.FLYING
             setFlightControlsVisible(flying)
-            launch.visibility = if (state == GameSession.State.DOCKED) View.VISIBLE else View.GONE
             if (state == GameSession.State.FLYING && lastState == GameSession.State.LAUNCHING) {
                 // Novo voo: o acelerador volta a acompanhar a velocidade de lançamento.
                 session.input.touch.throttle = Float.NaN

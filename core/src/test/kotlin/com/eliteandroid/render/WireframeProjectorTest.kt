@@ -3,6 +3,7 @@ package com.eliteandroid.render
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.ships.Blueprints
 import com.eliteandroid.ships.ShipInstance
+import com.eliteandroid.ships.orient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -35,10 +36,12 @@ class WireframeProjectorTest {
 
     @Test
     fun `projection matches x over z times focal`() {
+        // Focal = altura × 256/192 = 800 (o mesmo campo vertical do original).
+        assertEquals(800f, projector.focal, 1e-3f)
         val out = Vector3()
         assertTrue(projector.projectPoint(100f, 50f, 1000f, out))
-        assertEquals(500f + 100f, out.x, 1e-3f)
-        assertEquals(300f + 50f, out.y, 1e-3f)
+        assertEquals(500f + 80f, out.x, 1e-3f)
+        assertEquals(300f + 40f, out.y, 1e-3f)
     }
 
     @Test

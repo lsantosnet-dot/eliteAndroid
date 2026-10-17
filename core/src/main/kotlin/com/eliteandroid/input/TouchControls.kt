@@ -20,4 +20,5 @@ class TouchControls {
     @Volatile var viewRequest: View? = null
     @Volatile var launchRequest = false
     @Volatile var hyperspaceRequest = false
+    @Volatile var jumpRequest = false
 }

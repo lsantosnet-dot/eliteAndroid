@@ -20,8 +20,9 @@ class Stardust(val count: Int = 18) {
     private val z = FloatArray(count)
     private val tmp = Vector3()
 
-    /** Dimensões da vista usadas para (re)posicionar partículas. Atualizado pelo [WireframeProjector]. */
-    var aspect = 16f / 9f
+    /** Meia largura/altura da vista em tangente (x/z, y/z). Atualizado pela [SpaceView]. */
+    var halfTanX = 0.8f
+    var halfTanY = 0.375f
 
     fun reset(view: View) {
         for (i in 0 until count) respawn(i, view)
@@ -30,9 +31,8 @@ class Stardust(val count: Int = 18) {
     /** Partícula aleatória dentro do volume visível da vista atual. */
     private fun respawn(i: Int, view: View) {
         val depth = MathUtils.random(NEAR * 2f, FAR)
-        // Focal = largura da vista → |x/z| ≤ 0.5 e |y/z| ≤ 0.5/aspect ficam na tela.
-        val vx = MathUtils.random(-0.5f, 0.5f) * depth
-        val vy = MathUtils.random(-0.5f, 0.5f) / aspect * depth
+        val vx = MathUtils.random(-halfTanX, halfTanX) * depth
+        val vy = MathUtils.random(-halfTanY, halfTanY) * depth
         view.fromView(vx, vy, depth, tmp)
         x[i] = tmp.x; y[i] = tmp.y; z[i] = tmp.z
     }
@@ -48,7 +48,7 @@ class Stardust(val count: Int = 18) {
 
             view.toView(x[i], y[i], z[i], tmp)
             if (tmp.z < NEAR || tmp.z > FAR * 1.2f ||
-                kotlin.math.abs(tmp.x) > tmp.z * 0.55f || kotlin.math.abs(tmp.y) > tmp.z * 0.55f / aspect
+                kotlin.math.abs(tmp.x) > tmp.z * halfTanX * 1.1f || kotlin.math.abs(tmp.y) > tmp.z * halfTanY * 1.1f
             ) respawn(i, view)
         }
     }

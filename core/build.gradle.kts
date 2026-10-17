@@ -21,5 +21,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // Um teste travado falha em vez de prender o build.
+    systemProperty("junit.jupiter.execution.timeout.default", "30 s")
+    systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
     testLogging { events("passed", "failed", "skipped") }
 }

@@ -10,13 +10,16 @@ Referências: *Mark Moxon's Elite Disassembly* e *Text Elite* (Ian Bell).
 ```
 core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Android SDK)
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
+  economy/  Commodities (QQ23), Market (GVL/TT151), Commander (CASH, QQ20, CRGO)
   ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), ShipInstance (nosev/roofv/sidev)
-  flight/   FlightModel (MVEIT, ISDK), PlayerShip (JSTX/JSTY, α/β, DELTA), View (PLUT)
+  flight/   FlightModel (MVEIT, ISDK, SOLAR, WARP), PlayerShip, Planet, View (PLUT),
+            HyperspaceCountdown (QQ22)
   hud/      Dashboard (DIALS, COMPAS), Scanner (SCAN — radar 3D "prato")
   input/    FlightInput (teclado do original), TouchControls (ponte UI Android → jogo)
   render/   WireframeProjector, NeonLineBatch, BloomRenderer, Stardust, LaunchTunnel, SpaceView
 android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
-  ui/       FlightControlsOverlay, JoystickView, ThrottleView, NeonButton, NeonStyle
+  ui/       FlightControlsOverlay, JoystickView, ThrottleView, NeonButton, NeonStyle,
+            StationPanel (mercado/status/combustível/mapas/dados), ChartView (mapas estelares)
 desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 ```
 
@@ -27,7 +30,7 @@ desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 3. ✅ Física de voo, câmeras e docking
 4. ✅ Scanner 3D e HUD
 5. ✅ Controles touch
-6. ⏳ Economia, mercado e hiperespaço
+6. ✅ Economia, mercado e hiperespaço
 
 ## Build
 
@@ -136,7 +139,8 @@ estilo neon, comunicando-se com o jogo por `TouchControls` (campos `@Volatile`):
 | Hiperespaço | **HYPER** (mostra a contagem) | `H` |
 | Vistas | **F R L D** no canto superior direito | F1–F4 ou 1–4 |
 | Decolar | **LAUNCH** quando atracado | `L` ou Enter |
-| Destino | toque na ficha **[ DATA ]** para percorrer os sistemas a até 7 LY | — |
+| Destino | **MAP** (em voo) ou aba **CHART** (atracado): toque num sistema | — |
+| Salto no sistema | **JUMP** | `J` |
 
 O manche funciona como o joystick analógico do original (define JSTX/JSTY direto); ao
 soltá-lo, o amortecimento do teclado recentraliza aos poucos.
@@ -150,5 +154,44 @@ atirar na estação a deixa **hostil**, e aí atracar vira colisão.
 
 **Hiperespaço** (hyp/wW/QQ22): exige um destino diferente do sistema atual e combustível
 suficiente ("RANGE?" se não houver); contagem de 15 na tela — o primeiro passo leva 15
-ciclos e os seguintes 5 (85 ciclos). Ao zerar, toca o túnel do hiperespaço; a chegada ao
-novo sistema é a Etapa 6.
+ciclos e os seguintes 5 (85 ciclos). Ao zerar, toca o túnel do hiperespaço.
+
+## Economia, mapas e o loop do hiperespaço (Etapa 6)
+
+![Planeta à frente após decolar](docs/etapa6-planeta.png)
+![Chegada em Diso](docs/etapa6-chegada.png)
+
+**Mercado** (QQ23, GVL, TT151 — idêntico ao `genmarket()` do Text Elite): 17 mercadorias
+com preço base, fator econômico, quantidade base e máscara. A cada chegada sorteia-se um
+byte QQ26; com variação = QQ26 AND máscara e produto = economia × fator:
+
+    preço      = ((preço_base + variação + produto) AND 255) × 4      (décimos de Cr)
+    quantidade = (qtd_base + variação − produto) AND 255 → 0 se bit 7 → AND 63
+
+Itens alienígenas nunca estão à venda; compra = venda. O comandante padrão (JAMESON)
+começa em Lave com 100.0 Cr, porão de 20 t, tanque cheio, e a oferta inicial gravada no
+arquivo de comandante (QQ26 = 0). Compras checam estoque, porão (tnpr: itens 0–12 contam
+em toneladas; ouro, platina e gemas até 200 cada) e dinheiro. Combustível: encher o
+tanque custa 0.2 Cr por 0.1 LY (EQSHP).
+
+**Mapas** (TT23/TT22): curto alcance com |dx| < 20 e |dy| < 38, x × 4 e y × 2 (raio do
+círculo de combustível = combustível em décimos de LY), estrelas de raio 2 + bit 0 de
+s2_hi; galáctico com os 256 sistemas em (x, y/2). Tocar escolhe o destino.
+
+**Salto** (TT18 + SOLAR): gasta o combustível da distância, troca de sistema, sorteia o
+novo mercado e monta o sistema: planeta à frente (z = 3..7 × 65536, deslocado para cima
+e à direita ou para baixo e à esquerda) e sol atrás. **JUMP** (WARP) aproxima planeta e
+sol em 65536 por vez, se não houver estação por perto. Perto do planeta (parte 14), a
+estação surge a um raio de altitude sobre ele (planeta + 2·nosev), com a fenda voltada
+para o planeta; o sol some (WPLS). A altitude (parte 15) é √(d² − 96²); bater no planeta
+é fatal. A bússola aponta para o planeta e, na zona segura, para a estação.
+
+**Planeta** (raio 24576): contorno + equador e meridiano, ou cratera (bit 1 do tech
+level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremulante.
+
+**Projeção:** a focal é altura × 256/192, o mesmo campo vertical do original (vista de
+256 × 192); a tela larga só amplia a visão lateral.
+
+Fora do escopo por enquanto: mis-jumps para o witchspace (0.78% dos saltos, com
+Thargoids), outras naves e combate, equipamentos além de combustível, coleta de
+combustível no sol e salvar o comandante.

@@ -10,7 +10,7 @@ import com.eliteandroid.flight.View
  *
  * Teclado (teclas do original): "<"/"," e ">"/"." rolam, "X" puxa o nariz para cima e "S"
  * para baixo, Espaço acelera e "?"/"/" desacelera, "A" dispara o laser, "H" aciona o
- * hiperespaço; setas também funcionam. F1–F4 ou 1–4 escolhem a vista e L/Enter decola.
+ * hiperespaço e "J" o salto dentro do sistema; setas também funcionam. F1–F4 ou 1–4 escolhem a vista e L/Enter decola.
  *
  * Toque: [touch], preenchido pela interface Android (manche, acelerador e botões).
  * O manche analógico funciona como o joystick do original (define JSTX/JSTY direto);
@@ -25,6 +25,7 @@ class FlightInput {
     var requestedView: View? = null
     var launchRequested = false
     var hyperspaceRequested = false
+    var jumpRequested = false
 
     fun poll() {
         val k = Gdx.input
@@ -57,6 +58,9 @@ class FlightInput {
         }
         if (k.isKeyJustPressed(Keys.H) || touch.hyperspaceRequest) {
             hyperspaceRequested = true; touch.hyperspaceRequest = false
+        }
+        if (k.isKeyJustPressed(Keys.J) || touch.jumpRequest) {
+            jumpRequested = true; touch.jumpRequest = false
         }
     }
 }

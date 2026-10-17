@@ -82,6 +82,13 @@ class PlayerShip {
         alpha = 0f; beta = 0f; laserCount = 0f
     }
 
+    /** RES2 após o hiperespaço: manche centralizado, laser frio; escudos e energia cheios. */
+    fun resetAfterJump() {
+        jstx = 0f; jsty = 0f; alpha = 0f; beta = 0f
+        energy = 255f; foreShield = 255f; aftShield = 255f
+        laserTemp = 0f; laserCount = 0f; altitude = 255f
+    }
+
     /**
      * Loop principal parte 13: a cada 8 ciclos, se a energia estiver acima de 50%
      * (bit 7 de ENERGY), cada escudo recarrega 1 (SHD); depois a energia sobe 1.

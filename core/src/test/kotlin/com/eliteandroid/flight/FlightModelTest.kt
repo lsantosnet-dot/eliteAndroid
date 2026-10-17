@@ -3,6 +3,7 @@ package com.eliteandroid.flight
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.ships.Blueprints
 import com.eliteandroid.ships.ShipInstance
+import com.eliteandroid.ships.orient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

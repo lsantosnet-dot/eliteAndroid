@@ -18,8 +18,9 @@ fun interface SegmentSink {
  *  3. aresta desenhada se sua visibilidade ≥ XX4 e uma de suas faces for visível;
  *  4. projeção x/z·256 + centro (LL9 parte 8), com recorte no plano próximo.
  *
- * Projeção: no BBC Elite a vista tem 256 px de largura → focal = largura da vista,
- * ~53° de campo horizontal.
+ * Projeção: no BBC Elite a vista tem 256 × 192 px e a focal é 256 (x/z·256), o que dá
+ * ~41° de campo vertical. Mantemos esse campo vertical (focal = altura × 256/192) e a tela
+ * larga do celular só amplia a visão lateral.
  */
 class WireframeProjector {
 
@@ -34,7 +35,10 @@ class WireframeProjector {
     private var world = FloatArray(64 * 3)
     private var faceVisible = BooleanArray(32)
 
-    val focal: Float get() = viewportWidth
+    val focal: Float get() = viewportHeight * (256f / 192f)
+
+    /** Pixels de tela por pixel do original (vista de 256 × 192). */
+    val originalScale: Float get() = focal / 256f
 
     /** Projeta [ship] e envia os segmentos visíveis para [sink]. Retorna o nº de segmentos. */
     fun project(ship: ShipInstance, sink: SegmentSink): Int {

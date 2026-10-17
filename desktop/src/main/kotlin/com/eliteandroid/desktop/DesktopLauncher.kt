@@ -17,7 +17,8 @@ import com.eliteandroid.flight.View
  *
  * Captura de tela (salva um PNG e sai): decola, voa [--time] segundos com o manche em
  * [--roll]/[--pitch] (−1..1), velocidade-alvo [--speed] (1..40) e fotografa na vista
- * [--view] (front, rear, left, right). [--fire] captura com o laser disparando e
+ * [--view] (front, rear, left, right). [--fire] captura com o laser disparando,
+ * [--arrive NOME] chega pelo hiperespaço nesse sistema, [--jumps N] dá N saltos "J" e
  * [--docked] fotografa a tela de atracado:
  *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
@@ -31,6 +32,8 @@ fun main(args: Array<String>) {
         docked = "--docked" in args,
         speed = args.valueAfter("--speed")?.toFloat(),
         fire = "--fire" in args,
+        arrive = args.valueAfter("--arrive"),
+        jumps = args.valueAfter("--jumps")?.toInt() ?: 0,
     )
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Elite")
@@ -47,6 +50,8 @@ private fun Array<String>.valueAfter(flag: String): String? = indexOf(flag).take
 private class ShotSpec(
     val time: Float, val view: View, val roll: Float, val pitch: Float, val docked: Boolean, val speed: Float?,
     val fire: Boolean,
+    val arrive: String?,
+    val jumps: Int,
 )
 
 /** Simula o voo pedido, renderiza alguns quadros e grava o framebuffer em PNG. */
@@ -60,7 +65,9 @@ private class ScreenshotWrapper(
     override fun render() {
         if (frames == 0 && !shot.docked) {
             val session = game.session
-            session.launchNow()
+            val target = shot.arrive?.let { session.galaxy.findByName(it) }
+            if (target != null) session.arriveNow(target) else session.launchNow()
+            repeat(shot.jumps) { session.model.inSystemJump() }
             val controls = FlightControls().apply { stickX = shot.roll; stickY = shot.pitch; targetSpeed = shot.speed }
             var t = 0f
             while (t < shot.time) { session.model.update(1f / 60f, controls); t += 1f / 60f }

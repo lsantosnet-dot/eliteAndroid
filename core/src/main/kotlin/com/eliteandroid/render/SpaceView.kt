@@ -9,6 +9,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.utils.Disposable
+import com.eliteandroid.flight.FlightModel
 import com.eliteandroid.flight.View
 import com.eliteandroid.ships.ShipInstance
 
@@ -30,6 +31,7 @@ interface HudLayer {
 class SpaceView : Disposable {
 
     val projector = WireframeProjector()
+    private val celestial = CelestialRenderer()
     val lines = NeonLineBatch()
     private val bloom = BloomRenderer()
     val sprites = SpriteBatch()
@@ -52,14 +54,20 @@ class SpaceView : Disposable {
         bloom.resize(width, height)
     }
 
-    fun render(ships: List<ShipInstance>, dust: Stardust?, view: View, hud: HudLayer) {
+    /** Desenha a vista espacial completa de [model] (ou só o HUD, se [model] for null). */
+    fun render(model: FlightModel?, view: View, hud: HudLayer) =
+        render(model?.ships ?: emptyList(), model?.dust, view, hud, model)
+
+    fun render(ships: List<ShipInstance>, dust: Stardust?, view: View, hud: HudLayer, model: FlightModel? = null) {
         projector.view = view
-        dust?.aspect = width / height
+        dust?.let { it.halfTanX = width / 2f / projector.focal; it.halfTanY = height / 2f / projector.focal }
         bloom.beginScene()
         Gdx.gl.glViewport(0, 0, width.toInt(), height.toInt())
 
         lines.begin(width, height)
         dust?.draw(projector, lines)
+        model?.sun?.let { celestial.drawSun(it, projector, lines, NeonPalette.SUN) }
+        model?.planet?.let { celestial.drawPlanet(it, projector, lines, NeonPalette.PLANET) }
         for (ship in ships) projector.project(ship, lines)
         hud.worldLines(lines)
         lines.end()

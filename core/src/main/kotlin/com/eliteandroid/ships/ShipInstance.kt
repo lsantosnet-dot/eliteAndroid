@@ -2,23 +2,37 @@ package com.eliteandroid.ships
 
 import com.badlogic.gdx.math.Vector3
 
+/** Aponta o nariz na direção [nose] mantendo o teto o mais próximo possível de [up]. */
+fun <T : SpaceObject> T.orient(nose: Vector3, up: Vector3 = Vector3.Y): T {
+    setOrientation(nose, up)
+    return this
+}
+
+/** Uma nave: um [SpaceObject] com modelo 3D e cor. */
+class ShipInstance(
+    val blueprint: ShipBlueprint,
+    position: Vector3 = Vector3(),
+    /** Cor ARGB empacotada usada pelo renderizador neon (ver [com.eliteandroid.render.NeonPalette]). */
+    var color: Float,
+) : SpaceObject(position) {
+
+    /** Estação hostil (AI byte #32 com bit 7) — atracar nela é fatal. */
+    var hostile = false
+}
+
 /**
- * Uma nave no espaço, no referencial do jogador — como no Elite original, o jogador está
- * sempre na origem olhando para +z (x à direita, y para cima) e é o universo que se move.
+ * Um objeto no espaço (nave, planeta, sol), no referencial do jogador — como no Elite
+ * original, o jogador está sempre na origem olhando para +z (x à direita, y para cima) e é
+ * o universo que se move.
  *
  * Equivale ao bloco de dados INWK: posição, os três vetores de orientação nosev (nariz),
  * roofv (teto) e sidev (lateral), velocidade (byte #27) e os contadores de rolagem (#29)
- * e arfagem (#30). Um vértice (x, y, z) do modelo vai para
+ * e arfagem (#30). Um ponto (x, y, z) do modelo vai para
  * `position + sidev·x + roofv·y + nosev·z`.
  *
  * Convenção do original (ZINF/TIDY): sidev = nosev × roofv.
  */
-class ShipInstance(
-    val blueprint: ShipBlueprint,
-    val position: Vector3 = Vector3(),
-    /** Cor ARGB empacotada usada pelo renderizador neon (ver [com.eliteandroid.render.NeonPalette]). */
-    var color: Float,
-) {
+open class SpaceObject(val position: Vector3 = Vector3()) {
     // Orientação padrão do ZINF: nariz apontando para o jogador.
     val nosev = Vector3(0f, 0f, -1f)
     val roofv = Vector3(0f, 1f, 0f)
@@ -34,17 +48,12 @@ class ShipInstance(
     var rollCounter = 0f
     var pitchCounter = 0f
 
-    /** Estação hostil (AI byte #32 com bit 7) — atracar nela é fatal. */
-    var hostile = false
-
     private val tmp = Vector3()
 
-    /** Aponta o nariz na direção [nose] mantendo o teto o mais próximo possível de [up]. */
-    fun orient(nose: Vector3, up: Vector3 = Vector3.Y): ShipInstance {
+    fun setOrientation(nose: Vector3, up: Vector3 = Vector3.Y) {
         nosev.set(nose).nor()
         roofv.set(up).mulAdd(nosev, -up.dot(nosev)).nor()
         sidev.set(nosev).crs(roofv)
-        return this
     }
 
     /** Equivalente ao TIDY: mantém a base ortonormal (sidev = nosev × roofv). */

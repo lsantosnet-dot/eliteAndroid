@@ -146,12 +146,15 @@ class Dashboard {
         }
     }
 
-    /** Bússola (COMPAS/SP2): aponta para a estação; amarela se à frente, verde se atrás. */
+    /**
+     * Bússola (COMPAS/SP2): aponta para a estação na zona segura, senão para o planeta;
+     * amarela se à frente, verde se atrás.
+     */
     private fun drawCompass(lines: NeonLineBatch, model: FlightModel) {
         ellipse(lines, COMPASS_X, COMPASS_Y, 11f, 11f, FRAME_COLOR)
-        val st = model.station ?: return
-        if (st.position.isZero) return
-        tmp.set(st.position).nor().scl(96f) // XX15: vetor unitário com 1.0 = 96
+        val target = model.compassTarget ?: return
+        if (target.position.isZero) return
+        tmp.set(target.position).nor().scl(96f) // XX15: vetor unitário com 1.0 = 96
         val dx = (abs(tmp.x).toInt() / 10).let { if (tmp.x < 0) -it else it }
         val dy = (abs(tmp.y).toInt() / 10).let { if (tmp.y < 0) -it else it }
         val c = if (tmp.z >= 0f) PANEL_COLOR else COMPASS_BEHIND
