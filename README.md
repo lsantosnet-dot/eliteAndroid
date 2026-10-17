@@ -11,9 +11,10 @@ Referências: *Mark Moxon's Elite Disassembly* e *Text Elite* (Ian Bell).
 core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Android SDK)
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
   economy/  Commodities (QQ23), Market (GVL/TT151), Commander (CASH, QQ20, CRGO)
-  ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), ShipInstance (nosev/roofv/sidev)
-  flight/   FlightModel (MVEIT, ISDK, SOLAR, WARP), PlayerShip, Planet, View (PLUT),
-            HyperspaceCountdown (QQ22)
+  ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), OriginalShips (gerado),
+            ShipType (tabela XX21), ShipInstance (nosev/roofv/sidev + estado de combate)
+  flight/   FlightModel (MVEIT, ISDK, SOLAR, WARP), Combat (TACTICS, surgimento, mísseis),
+            PlayerShip, Planet, View (PLUT), HyperspaceCountdown (QQ22)
   hud/      Dashboard (DIALS, COMPAS), Scanner (SCAN — radar 3D "prato")
   input/    FlightInput (teclado do original), TouchControls (ponte UI Android → jogo)
   render/   WireframeProjector, NeonLineBatch, BloomRenderer, Stardust, LaunchTunnel, SpaceView
@@ -21,6 +22,7 @@ android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
   ui/       FlightControlsOverlay, JoystickView, ThrottleView, NeonButton, NeonStyle,
             StationPanel (mercado/status/combustível/mapas/dados), ChartView (mapas estelares)
 desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
+tools/    extract_ships.py (gera OriginalShips.kt a partir do fonte do Moxon)
 ```
 
 ## Etapas
@@ -136,6 +138,7 @@ estilo neon, comunicando-se com o jogo por `TouchControls` (campos `@Volatile`):
 | Rolar / arfar | manche flutuante na esquerda (aparece onde o polegar toca; puxar para baixo sobe o nariz) | `<` `>` / `X` `S` (ou setas) |
 | Velocidade | acelerador vertical na direita (alvo 1–40; a nave acelera 1 por ciclo) | Espaço / `/` |
 | Laser | **FIRE** (segurar) | `A` |
+| Míssil | **MSL**: arma, trava (LOCK) e dispara; armado sem alvo, desarma | `T` arma, `M` dispara, `U` desarma |
 | Hiperespaço | **HYPER** (mostra a contagem) | `H` |
 | Vistas | **F R L D** no canto superior direito | F1–F4 ou 1–4 |
 | Decolar | **LAUNCH** quando atracado | `L` ou Enter |
@@ -193,5 +196,32 @@ level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremul
 256 × 192); a tela larga só amplia a visão lateral.
 
 Fora do escopo por enquanto: mis-jumps para o witchspace (0.78% dos saltos, com
-Thargoids), outras naves e combate, equipamentos além de combustível, coleta de
-combustível no sol e salvar o comandante.
+Thargoids), equipamentos além de combustível, coleta de combustível no sol e salvar o
+comandante.
+
+## Naves inimigas e mísseis
+
+![Combate](docs/combate.png)
+
+Modelos **extraídos automaticamente** do fonte (`tools/extract_ships.py`): Sidewinder,
+Viper (polícia), Mamba, Python, Cobra Mk III (caçador e comerciante), míssil, asteroide,
+contêiner e cápsula de fuga — vértices, arestas e atributos (energia, velocidade, laser,
+mísseis, recompensa, contêineres, vértice do canhão, explosão).
+
+- **Surgimento** (loop principal do jogo, partes 2 e 3, a cada 256 ciclos): 13% de
+  chance de comerciante, asteroide ou contêiner; fora da zona segura, polícia com chance
+  proporcional à carga ilegal (e ao FIST, se já houver polícia), e piratas (1 a 4
+  Sidewinders/Mambas) ou um caçador solitário (Mamba, Python, Cobra), sempre em
+  anarquias e com menos frequência quanto mais seguro o governo.
+- **IA** (TACTICS, a cada 8 ciclos por nave): recarga, rolagem aleatória, fuga em cápsula
+  com pouca energia, mísseis quando abaixo de metade da energia, laser quando apontada
+  para nós (a menos de 32·256; acerta com ângulo menor que ~14°, dano = byte #19 / 2) e
+  manobra de arfagem/rolagem em nossa direção (ou para longe, conforme a agressividade).
+  Na zona segura, piratas perdem a agressividade. Estação hostil lança Vipers.
+- **Nosso laser** (HITCH): tira 15 de energia por tiro; ANGRY deixa o alvo agressivo;
+  atingir comerciante ou polícia deixa a estação hostil; abater polícia → fugitivo.
+- **Mísseis**: armar procura um alvo na mira (indicador amarelo), trava (vermelho) e
+  dispara a partir de (0, −28, 14) ao dobro da nossa velocidade. O míssil persegue o
+  alvo; alvos com E.C.M. podem destruí-lo (6% por ciclo). Mísseis inimigos causam 250.
+- **Abates**: explosão (DOEXP), recompensa em créditos, contagem para a classificação
+  (Harmless … Elite) e 50% de chance de soltar contêineres. Colisões: 128 + energia/2.
