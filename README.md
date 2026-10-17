@@ -12,8 +12,9 @@ core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Andro
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
   economy/  Commodities (QQ23), Market (GVL/TT151), Commander (CASH, QQ20, CRGO)
   save/     CommanderSave (arquivo do comandante), PreferencesStorage
-  ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), OriginalShips (gerado),
-            ShipType (tabela XX21), ShipInstance (nosev/roofv/sidev + estado de combate)
+  ships/    ShipBlueprint, DiscShips (30 modelos e os 16 arquivos de naves, gerado),
+            OriginalShips (o míssil, gerado), ShipType (tabela XX21 + NEWB),
+            ShipInstance (nosev/roofv/sidev + estado de combate)
   flight/   FlightModel (MVEIT, ISDK, SOLAR, WARP), Combat (TACTICS, surgimento, mísseis),
             PlayerShip, Planet, View (PLUT), HyperspaceCountdown (QQ22)
   hud/      Dashboard (DIALS, COMPAS), Scanner (SCAN — radar 3D "prato")
@@ -23,7 +24,8 @@ android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
   ui/       FlightControlsOverlay, JoystickView, ThrottleView, NeonButton, NeonStyle,
             StationPanel (mercado/status/combustível/mapas/dados), ChartView (mapas estelares)
 desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
-tools/    extract_ships.py (gera OriginalShips.kt a partir do fonte do Moxon)
+tools/    extract_disc_ships.py (gera DiscShips.kt dos arquivos de naves da versão em disco)
+          extract_ships.py (gera OriginalShips.kt — o míssil — do fonte da versão cassete)
 ```
 
 ## Etapas
@@ -200,23 +202,22 @@ level), girando 1/16 rad por ciclo. **Sol**: linhas horizontais com borda tremul
 
 ![Combate](docs/combate.png)
 
-Modelos **extraídos automaticamente** do fonte (`tools/extract_ships.py`): Sidewinder,
-Viper (polícia), Mamba, Python, Cobra Mk III (caçador e comerciante), míssil, asteroide,
-contêiner e cápsula de fuga — vértices, arestas e atributos (energia, velocidade, laser,
-mísseis, recompensa, contêineres, vértice do canhão, explosão).
+O tráfego, a IA e os modelos vêm da **versão em disco** do BBC Elite (a cassete só tem 13
+tipos de nave; ver [Naves da versão em disco](#naves-da-versão-em-disco)).
 
 - **Surgimento** (loop principal do jogo, partes 2 e 3, a cada 256 ciclos): 13% de
-  chance de comerciante, asteroide ou contêiner; fora da zona segura, polícia com chance
-  proporcional à carga ilegal (e ao FIST, se já houver polícia), e piratas (1 a 4
-  Sidewinders/Mambas) ou um caçador solitário (Mamba, Python, Cobra), sempre em
+  chance de comerciante, pedregulho, asteroide ou contêiner (até 3 "lixos" por perto);
+  fora da zona segura, polícia com chance proporcional à carga ilegal (e ao FIST, se já
+  houver polícia), e piratas (bandos de 1 a 4) ou um caçador solitário, sempre em
   anarquias e com menos frequência quanto mais seguro o governo.
-- **IA** (TACTICS, a cada 8 ciclos por nave): recarga, rolagem aleatória, fuga em cápsula
-  com pouca energia, mísseis quando abaixo de metade da energia, laser quando apontada
-  para nós (a menos de 32·256; acerta com ângulo menor que ~14°, dano = byte #19 / 2) e
-  manobra de arfagem/rolagem em nossa direção (ou para longe, conforme a agressividade).
-  Na zona segura, piratas perdem a agressividade. Estação hostil lança Vipers.
-- **Nosso laser** (HITCH): tira 15 de energia por tiro; ANGRY deixa o alvo agressivo;
-  atingir comerciante ou polícia deixa a estação hostil; abater polícia → fugitivo.
+- **IA** (TACTICS, a cada 8 ciclos por nave com IA): recarga, rolagem aleatória, fuga em
+  cápsula com pouca energia (só quem tem uma), mísseis quando abaixo de metade da
+  energia, laser quando apontada para nós (a menos de 32·256; acerta com ângulo menor
+  que ~14°, dano = byte #19 / 2) e manobra de arfagem/rolagem em nossa direção (ou para
+  longe, conforme a agressividade). Na zona segura, piratas perdem a agressividade.
+- **Nosso laser** (HITCH): tira 15 de energia por tiro; ANGRY deixa o alvo agressivo e
+  hostil; atingir uma nave "inocente" ou a estação deixa a estação hostil (ela passa a
+  lançar Vipers); abater a polícia → fugitivo.
 - **Mísseis**: armar procura um alvo na mira (indicador amarelo), trava (vermelho) e
   dispara a partir de (0, −28, 14) ao dobro da nossa velocidade. O míssil persegue o
   alvo; alvos com E.C.M. podem destruí-lo (6% por ciclo). Mísseis inimigos causam 250.
@@ -245,8 +246,56 @@ Os modelos do Thargoid (disco octogonal, 20 vértices, 240 de energia, recompens
 50 Cr) e do Thargon (que no original reaproveita as arestas do contêiner) são extraídos
 do fonte. No TACTICS, o Thargoid nunca foge em cápsula e, em vez de mísseis, **lança
 Thargons** (até 6). Sem nenhum Thargoid por perto, os Thargons perdem o E.C.M. e ficam à
-deriva com metade da velocidade; com os coletores, viram **Alien Items**. No espaço
-normal, o caçador solitário do tipo 6 também pode ser um Thargoid (22%).
+deriva com metade da velocidade; com os coletores, viram **Alien Items**. Como na versão
+em disco, fora das missões os Thargoids só aparecem no witchspace (que carrega o
+arquivo de naves D).
+
+## Naves da versão em disco
+
+![Naves da versão em disco](docs/naves.png)
+
+*Krait, Adder, Gecko, Cobra Mk I, Asp Mk II e Fer-de-Lance; Moray, Worm, Boa, Anaconda,
+Shuttle e Transporter.*
+
+A versão em disco acrescentou 17 modelos aos 12 da cassete (e variantes piratas do
+Cobra Mk III e da Python). Os modelos (VERTEX, EDGE e
+FACE, com as normais e as distâncias de visibilidade das faces do original) são
+extraídos dos 16 arquivos de naves `elite-ships-a..p.asm` por
+`tools/extract_disc_ships.py`:
+
+| Papel | Naves |
+|---|---|
+| Estação | Coriolis; **Dodecaedro** nos sistemas de tech level alto |
+| Lixo | cápsula de fuga, **placa de liga**, contêiner, **pedregulho**, asteroide, **fragmento** |
+| Comerciantes | **Shuttle**, **Transporter**, Cobra Mk III, Python, **Boa**, **Anaconda** |
+| Polícia | Viper |
+| Piratas | Sidewinder, Mamba, **Krait**, **Adder**, **Gecko**, **Cobra Mk I**, **Worm**, Cobra Mk III, **Asp Mk II**, Python |
+| Caçadores de recompensas | **Fer-de-Lance** (e a Viper) |
+| Alienígenas | Thargoid, Thargon |
+
+- **Arquivos de naves (LOMOD)**: a memória do BBC só comportava parte das naves, então
+  cada lançamento ou chegada carrega um dos 16 arquivos "A" a "P" — 2 bits aleatórios, um
+  pelo governo (≥ 3) e um pelo tech level (≥ 10). Só as naves do arquivo carregado podem
+  surgir, e a estação dos sistemas avançados é a Dodecaedro. Um bando sorteia tipos de
+  Sidewinder até Cobra Mk III; se o tipo não está no arquivo, tenta o anterior.
+- **Flags NEWB** (tabela E%): comerciante, caçador de recompensas, hostil, pirata,
+  atracando, inocente, polícia e "tem cápsula de fuga". A bolha local tem 12 posições
+  (NOSH).
+- **Comerciantes** (MTT4): Cobra Mk III, Python, Boa ou Anaconda; metade ganha IA e vai
+  **atracar** (DOCKIT): segue para o planeta, vai até o ponto ideal 768 unidades à frente
+  da fenda, vira para a estação devagar e, alinhada, entra e some. Os demais seguem
+  para o planeta. Atirar neles (inocentes) deixa a estação hostil.
+- **Estação**: de vez em quando lança um **Shuttle** ou um **Transporter** (que seguem
+  para o planeta); hostil, lança Vipers.
+- **Anaconda**: 22% de chance, a cada decisão, de lançar um **Worm**.
+- **Caçadores de recompensas**: neutros, até o nosso status legal chegar a 40 (infrator
+  grave ou fugitivo) — aí atacam.
+- **Coletores**: placas de liga viram **Alloys**, fragmentos viram **Minerals**,
+  cápsulas viram **Slaves** e Thargons viram **Alien Items** (byte #0 do modelo).
+
+A **Moray** está nos arquivos de naves, mas — como no original — nenhuma rotina de
+surgimento chega ao tipo 28, então ela nunca aparece. Ficaram de fora as missões da
+versão em disco (a Constrictor e os planos dos Thargoids).
 
 ## Loja de equipamentos
 

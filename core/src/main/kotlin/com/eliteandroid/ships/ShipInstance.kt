@@ -10,7 +10,8 @@ fun <T : SpaceObject> T.orient(nose: Vector3, up: Vector3 = Vector3.Y): T {
 
 /**
  * Uma nave: um [SpaceObject] com modelo 3D, cor e o estado de combate do bloco INWK:
- * energia (#35), mísseis e estado de explosão (#31), aceleração (#28) e o byte de IA (#32:
+ * energia (#35), mísseis e estado de explosão (#31), aceleração (#28), flags NEWB (#36)
+ * e o byte de IA (#32:
  * bit 7 = IA ligada, bits 1-6 = agressividade, bit 0 = E.C.M.; nos mísseis, bit 6 = hostil
  * a nós e bits 1-5 = alvo).
  */
@@ -24,8 +25,16 @@ class ShipInstance(
 
     constructor(type: ShipType, position: Vector3) : this(type.blueprint, position, type.color, type)
 
-    /** Estação hostil (AI byte #32 com bit 7) — atracar nela é fatal. */
-    var hostile = false
+    /**
+     * NEWB (byte #36 da versão em disco): papel e estado da nave — ver [Newb]. Ao surgir,
+     * vem da tabela E% sem os bits 4 e 7 (NW8).
+     */
+    var newb = type.defaultNewb and 0b01101111
+
+    /** Bit 2 do NEWB: hostil (na estação, atracar nela é fatal). */
+    var hostile: Boolean
+        get() = newb and Newb.HOSTILE != 0
+        set(v) { newb = if (v) newb or Newb.HOSTILE else newb and Newb.HOSTILE.inv() }
 
     /** Posição na bolha local (escalona o TACTICS: cada nave a cada 8 ciclos). */
     var slot = 0

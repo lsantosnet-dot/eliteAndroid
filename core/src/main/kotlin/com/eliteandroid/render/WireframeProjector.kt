@@ -68,7 +68,7 @@ class WireframeProjector {
             val d = bp.faceNormals[i] * (camModel.x - bp.facePoints[i]) +
                 bp.faceNormals[i + 1] * (camModel.y - bp.facePoints[i + 1]) +
                 bp.faceNormals[i + 2] * (camModel.z - bp.facePoints[i + 2])
-            faceVisible[f] = d > 0f
+            faceVisible[f] = d > 0f || bp.faceAlwaysVisible[f] || xx4 > bp.faceVisibility[f]
         }
 
         if (world.size < bp.vertexCount * 3) world = FloatArray(bp.vertexCount * 3)

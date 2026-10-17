@@ -2,17 +2,21 @@ package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.economy.Commodities
+import com.eliteandroid.ships.Newb
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
 import kotlin.math.abs
 import kotlin.random.Random
 
 /**
- * Combate e tráfego, portados do original:
+ * Combate e tráfego, portados da versão em disco do BBC Elite (que tem as naves extras):
  *
- *  - surgimento de naves (loop principal do jogo, partes 2 e 3) a cada 256 ciclos;
- *  - IA TACTICS (partes 1-7): mísseis, cápsulas de fuga, estação hostil lançando polícia,
- *    recarga de energia, fuga, disparo de mísseis e laser, manobras e aceleração;
+ *  - surgimento de naves (loop principal do jogo, partes 2 e 3) a cada 256 ciclos, só dos
+ *    tipos presentes no arquivo de naves carregado ([FlightModel.shipFile]);
+ *  - IA TACTICS (partes 1-7) guiada pelas flags NEWB: comerciantes rumo ao planeta ou
+ *    atracando (DOCKIT), caçadores de recompensas, piratas, polícia, a estação lançando
+ *    Shuttles, Transporters e Vipers, a Anaconda lançando Worms, cápsulas de fuga,
+ *    mísseis, laser, manobras e aceleração;
  *  - nossos mísseis (T arma, M dispara, U desarma; trava pelo HITCH);
  *  - laser do jogador (HITCH + MA14/ANGRY), colisões (MA58), mortes com recompensa,
  *    contêineres (parte 5), status legal (FIST) e contagem de abates (TALLY);
@@ -101,7 +105,7 @@ class Combat(private val model: FlightModel) {
         m.speed = (2f * model.player.speed).coerceAtMost(ShipType.MISSILE.blueprint.maxSpeed.toFloat())
         m.aiFlag = 0x80
         m.missileTarget = target
-        model.addShip(m)
+        if (!model.spawn(m)) return false // bolha cheia
         angry(target)
         model.player.missiles--
         unarmMissile()
@@ -127,7 +131,7 @@ class Combat(private val model: FlightModel) {
         if (!model.player.energyBomb) return false
         model.player.energyBomb = false
         for (ship in model.ships.toList()) {
-            if (ship.type != ShipType.STATION && !ship.killed) kill(ship, byUs = true)
+            if (!ship.type.isStation && !ship.killed) kill(ship, byUs = true)
         }
         bombFlash = 4f
         return true
@@ -154,7 +158,8 @@ class Combat(private val model: FlightModel) {
             if (ship.killed) ship.cloudCounter += 4f * f
             if (ship.laserFlash > 0f) ship.laserFlash -= f
         }
-        model.ships.removeAll { it.killed && it.cloudCounter >= 256f }
+        // Explosões que terminaram e naves que atracaram ou foram recolhidas (NEWB bit 7).
+        model.ships.removeAll { (it.killed && it.cloudCounter >= 256f) || (it.newb and Newb.GONE != 0) }
     }
 
     // ------------------------------------------------------------ laser do jogador
@@ -172,7 +177,7 @@ class Combat(private val model: FlightModel) {
     fun laserShot(power: Int) {
         for (ship in model.ships.toList()) { // cópia: abates podem soltar contêineres
             if (ship.killed || !inCrosshairs(ship)) continue
-            if (ship.type == ShipType.STATION) { angry(ship); continue } // indestrutível
+            if (ship.type.isStation) { angry(ship); continue } // indestrutível
             ship.energy -= power
             if (ship.energy > 0f) angry(ship)
             else kill(ship, byUs = true)
@@ -180,47 +185,39 @@ class Combat(private val model: FlightModel) {
     }
 
     /**
-     * ANGRY: a estação fica hostil; atingir um comerciante também a deixa hostil. Naves com
-     * IA passam a agir agressivamente, aceleram (2) e mergulham (contador de arfagem 4).
+     * ANGRY: atingir a estação, ou uma nave "inocente" (NEWB bit 5), deixa a estação
+     * hostil. Naves com IA passam a agir agressivamente, aceleram (2) e mergulham (arfagem
+     * 4); de CYL em diante (não lixo), ficam hostis (NEWB bit 2).
      */
     fun angry(ship: ShipInstance) {
-        when (ship.type) {
-            ShipType.STATION -> { ship.hostile = true; ship.aiFlag = ship.aiFlag or 0x80; return }
-            ShipType.MISSILE, ShipType.ASTEROID, ShipType.CANISTER, ShipType.ESCAPE_POD -> return
-            ShipType.COBRA_TRADER -> model.station?.let { angry(it) }
-            else -> Unit
-        }
+        if (ship.type.isStation) { ship.hostile = true; return }
+        if (ship.newb and Newb.INNOCENT != 0) model.station?.let { it.hostile = true }
         if (ship.aiFlag == 0) return
         ship.aiFlag = ship.aiFlag or 0x80
         ship.acceleration = 2f
         ship.pitchCounter = 4f
+        if (ship.type.id >= ShipType.COBRA_TRADER.id) ship.hostile = true
     }
 
     /**
-     * Morte (bit 7 do #31): explosão; recompensa (parte 5); polícia abatida nos torna
-     * fugitivos (FIST ≥ 64); 50% de chance de soltar até "max canisters" contêineres.
+     * Morte (bit 7 do #31): explosão; recompensa (parte 12, nenhuma no witchspace); abater
+     * a polícia (NEWB bit 6) nos torna fugitivos (FIST ≥ 64); 50% de chance de soltar até
+     * "max canisters" contêineres.
      */
     fun kill(ship: ShipInstance, byUs: Boolean) {
         if (ship.killed) return
         ship.killed = true
         ship.cloudCounter = 18f
         if (byUs) model.player.kills++
-        if (ship.type == ShipType.VIPER) model.player.legalStatus = model.player.legalStatus or 64
+        if (ship.newb and Newb.COP != 0) model.player.legalStatus = model.player.legalStatus or 64
         val bounty = ship.blueprint.bounty
-        // q2: no witchspace não há recompensas.
         if (bounty > 0 && !model.witchspace) {
             onBounty(bounty)
             messages += "BOUNTY %d.%d CR".format(bounty / 10, bounty % 10)
         }
         if (dornd() < 128) {
             var count = dornd() and ship.blueprint.maxCanisters
-            while (count-- > 0) {
-                val c = ShipInstance(ShipType.CANISTER, Vector3(ship.position))
-                c.setOrientation(ship.nosev, ship.roofv)
-                c.speed = ship.speed
-                c.rollCounter = (dornd() or 0x60).toSigned()
-                model.addShip(c)
-            }
+            while (count-- > 0) spawnChild(ship, ShipType.CANISTER, 0)
         }
         if (missileTarget === ship) unarmMissile()
     }
@@ -231,24 +228,20 @@ class Combat(private val model: FlightModel) {
      * MA58: uma nave a menos de 64 unidades em cada eixo bateu em nós — ela é destruída e
      * o dano é 128 + energia/2 (no escudo do lado da batida). Mísseis têm checagem própria.
      *
-     * Parte 8: com coletores instalados, um contêiner ou cápsula de fuga que passe por baixo
-     * da nave (y < 0) é recolhido — um item aleatório 0..7 (a cápsula vira escravos); sem
-     * lugar no porão, ele se desfaz sem causar dano.
+     * Parte 8: com coletores instalados, o que passar por baixo da nave (y < 0) e puder ser
+     * recolhido vira carga — o contêiner, um item aleatório 0..7; os demais, o item do byte
+     * #0 do modelo (cápsula = escravos, placa = ligas, fragmento = minerais, Thargon = Alien
+     * Items). Sem lugar no porão, o objeto se desfaz sem causar dano.
      */
     fun checkCollisions(): Boolean {
         for (ship in model.ships.toList()) {
-            if (ship.killed || ship.type == ShipType.STATION || ship.type == ShipType.MISSILE) continue
+            if (ship.killed || ship.type.isStation || ship.type == ShipType.MISSILE) continue
             val p = ship.position
             if (abs(p.x) >= 64f || abs(p.y) >= 64f || abs(p.z) >= 64f) continue
-            // Tipos ≥ OIL: contêiner, Thargon (vira "Alien Items") e cápsula de fuga (escravos).
-            val scoopable = ship.type == ShipType.CANISTER || ship.type == ShipType.THARGON || ship.type == ShipType.ESCAPE_POD
-            if (scoopable && model.player.fuelScoops && p.y < 0f) {
-                val item = when (ship.type) {
-                    ShipType.ESCAPE_POD -> 3
-                    ShipType.THARGON -> Commodities.ALIEN_ITEMS
-                    else -> dornd() and 7
-                }
+            val item = if (ship.type == ShipType.CANISTER) dornd() and 7 else ship.blueprint.scoopItem
+            if (item >= 0 && model.player.fuelScoops && p.y < 0f) {
                 if (onScoop(item)) {
+                    ship.newb = ship.newb or Newb.GONE
                     model.ships.remove(ship)
                     messages += Commodities.ALL[item].name.uppercase()
                 } else {
@@ -265,75 +258,91 @@ class Combat(private val model: FlightModel) {
 
     // ------------------------------------------------------------ surgimento
 
+    /** JUNK: lixo na bolha (cápsulas, placas, contêineres, pedras, Shuttles, Transporters). */
+    private val junk: Int get() = model.ships.count { it.type.isJunk && !it.killed }
+
+    private fun many(type: ShipType) = model.ships.count { it.type == type && !it.killed }
+
     /** Loop principal do jogo, partes 2 e 3 (chamado quando MCNT dá a volta, a cada 256). */
     fun spawnCheck() {
         if (model.witchspace) return // no witchspace nada novo aparece
-        val ships = model.ships
         val safeZone = model.station != null
-        // Parte 2: 13% de chance de algo inofensivo (com menos de 3 asteroides por perto).
-        if (dornd() < 35 && ships.count { it.type == ShipType.ASTEROID } < 3) {
+        // Parte 2: 13% de chance de algo inofensivo (com menos de 3 "lixos" por perto).
+        if (dornd() < 35 && junk < 3) {
             val a = dornd(); val x = dornd()
             val xHi = if (rng.nextBoolean()) 2 else 0
-            val pos = Vector3(
-                signed(a, xHi * 256f + a), signed(x, (x and 0xFF).toFloat()), 38f * 256f,
-            )
-            val r = dornd(); val rx = dornd()
-            if (rng.nextBoolean()) {
-                // MTT4: comerciante (Cobra Mk III), sem IA mas com agressividade latente.
-                val t = ShipInstance(ShipType.COBRA_TRADER, pos)
-                t.aiFlag = r ushr 1
-                t.rollCounter = (r ushr 1).toFloat()
-                t.speed = ((r and 31) or 16).toFloat()
-                model.addShip(t)
+            val pos = Vector3(signed(a, xHi * 256f + a), signed(x, x.toFloat()), 38f * 256f)
+            if (rng.nextBoolean()) { // DORND com V = 1: comerciante (MTT4)
+                spawnTrader(pos)
                 return
             }
+            val r = dornd(); val rx = dornd()
             if (!safeZone) {
-                val junk = ShipInstance(if (dornd() >= 5) ShipType.ASTEROID else ShipType.CANISTER, pos)
-                junk.rollCounter = (r or 0b01101111).toSigned()
-                if (rng.nextBoolean()) junk.speed = ((rx and 31) or 16).toFloat()
-                else junk.pitchCounter = (rx or 0x7F).toSigned()
-                model.addShip(junk)
-                return
+                // OIL + (0 ou 1) + C: contêiner (2%), pedregulho ou asteroide.
+                val type = ShipType.byId(5 + (dornd() and 1) + (if (dornd() >= 10) 1 else 0))!!
+                val junkShip = ShipInstance(type, pos)
+                junkShip.rollCounter = (r or 0b01101111).toSigned()
+                if (rng.nextBoolean()) junkShip.speed = ((rx and 31) or 16).toFloat()
+                else junkShip.pitchCounter = (rx or 0x7F).toSigned()
+                model.spawn(junkShip)
             }
         }
         if (safeZone) return
 
         // Parte 3: polícia, mais provável quanto pior o nosso status (BAD·2, ou FIST com polícia por perto).
         var badness = (contraband() * 2).coerceAtMost(255)
-        if (ships.any { it.type == ShipType.VIPER }) badness = badness or model.player.legalStatus
+        if (many(ShipType.VIPER) > 0) badness = badness or model.player.legalStatus
         val (pos, ai, a) = ze()
-        if (a < badness) model.addShip(ShipInstance(ShipType.VIPER, pos).also { it.aiFlag = ai })
-        if (ships.any { it.type == ShipType.VIPER }) return
+        if (a < badness) model.spawn(ShipInstance(ShipType.VIPER, pos).also { it.aiFlag = ai })
+        if (many(ShipType.VIPER) > 0) return
 
-        // Piratas ou caçador de recompensas, mais comuns em governos perigosos.
+        // Piratas ou caçadores de recompensas, mais comuns em governos perigosos.
         extraVesselDelay--
         if (extraVesselDelay >= 0) return
         extraVesselDelay = 0
         val r = dornd()
         if (government != 0) {
-            if (r >= 90) return
+            if (r >= 120) return
             if ((r and 7) < government) return
         }
         val (pos2, ai2, a2) = ze()
-        if (a2 >= 200) {
-            // mt1: bando de 1 a 4 piratas (Sidewinders e Mambas).
+        if (a2 >= 100) {
+            // mt1: bando de 1 a 4 piratas, de Sidewinder (PACK) a Cobra Mk III pirata; se o
+            // tipo sorteado não estiver no arquivo de naves, tenta o anterior.
             val n = a2 and 3
             extraVesselDelay = n
             repeat(n + 1) {
-                val type = if (dornd() and 2 == 0) ShipType.SIDEWINDER else ShipType.MAMBA
-                model.addShip(ShipInstance(type, Vector3(pos2)).also { it.aiFlag = ai2 })
+                var t = dornd() and dornd() and 7
+                while (t >= 0) {
+                    val type = ShipType.byId(ShipType.SIDEWINDER.id + t)!!
+                    if (model.spawn(ShipInstance(type, Vector3(pos2)).also { it.aiFlag = ai2 })) break
+                    t--
+                }
             }
         } else {
-            // Caçador solitário: Mamba, Python ou Cobra; o tipo 6 é um Thargoid (tha: 22%).
+            // Caçador solitário: Cobra Mk III, Asp Mk II, Python ou Fer-de-Lance (CYL2 + 0..3).
             extraVesselDelay++
-            val type = when ((a2 and 3) + 3) {
-                3 -> ShipType.MAMBA; 4 -> ShipType.PYTHON; 5 -> ShipType.COBRA_HUNTER
-                else -> { if (dornd() >= 200) spawnThargoid(); return }
-            }
-            val x = dornd()
-            val ai = (((x shl 1) or (if (x >= 200) 1 else 0)) or 0xC0) and 0xFF
-            model.addShip(ShipInstance(type, pos2).also { it.aiFlag = ai })
+            val type = ShipType.byId(ShipType.COBRA_PIRATE.id + (a2 and 3))!!
+            model.spawn(ShipInstance(type, pos2).also { it.aiFlag = ai2 })
         }
+    }
+
+    /**
+     * MTT4: comerciante (Cobra Mk III, Python, Boa ou Anaconda) rolando devagar; metade
+     * ganha IA e vai atracar na estação (NEWB bit 4).
+     */
+    private fun spawnTrader(pos: Vector3) {
+        val r = dornd() ushr 1
+        val r2 = dornd()
+        val docking = r2 and 0x80 == 0
+        val ai = if (docking) r or 0xC0 else r
+        val type = ShipType.byId(ShipType.COBRA_TRADER.id + ((if (docking) ai else r2) and 2) + (if (rng.nextBoolean()) 1 else 0))!!
+        val t = ShipInstance(type, pos)
+        t.aiFlag = ai
+        t.rollCounter = r.toFloat()
+        t.speed = ((r and 15) or 16).toFloat()
+        if (docking) t.newb = t.newb or Newb.DOCKING
+        model.spawn(t)
     }
 
     /**
@@ -342,15 +351,16 @@ class Combat(private val model: FlightModel) {
      */
     fun spawnThargoid() {
         val (pos, _, _) = ze()
-        model.addShip(ShipInstance(ShipType.THARGOID, Vector3(pos)).also { it.aiFlag = 0xFF })
-        model.addShip(ShipInstance(ShipType.THARGON, Vector3(pos)).also { it.aiFlag = 0xFF })
+        model.spawn(ShipInstance(ShipType.THARGOID, Vector3(pos)).also { it.aiFlag = 0xFF })
+        model.spawn(ShipInstance(ShipType.THARGON, Vector3(pos)).also { it.aiFlag = 0xFF })
     }
 
-    /** Ze: nave agressiva em (±8192, ±8192, 8192), IA = %11000000 + E.C.M. em 4%. */
+    /** Ze: nave agressiva em (±6400, ±6400, 6400), IA = %11000000 + E.C.M. em 4%. */
     private fun ze(): Triple<Vector3, Int, Int> {
         val a = dornd(); val x = dornd()
-        val pos = Vector3(if (a and 0x80 != 0) -8192f else 8192f, if (x and 0x80 != 0) -8192f else 8192f, 8192f)
-        val ai = 0xC0 or (if (x >= 245) 1 else 0)
+        val d = 25f * 256f
+        val pos = Vector3(if (a and 0x80 != 0) -d else d, if (x and 0x80 != 0) -d else d, d)
+        val ai = 0xC0 or (if (dornd() >= 245) 1 else 0)
         return Triple(pos, ai, dornd())
     }
 
@@ -362,64 +372,63 @@ class Combat(private val model: FlightModel) {
     private val xx15 = Vector3()
     private val k3 = Vector3()
 
-    /** TACTICS para uma nave (a cada 8 ciclos por nave; mísseis a cada ciclo). */
+    /** TACTICS para uma nave com IA (a cada 8 ciclos por nave; mísseis a cada ciclo). */
     fun tactics(ship: ShipInstance) {
         if (ship.killed) return
-        when (ship.type) {
-            ShipType.MISSILE -> { missileTactics(ship); return }
-            ShipType.ESCAPE_POD -> {
-                // Aponta para o planeta (SPS1) e manobra (TA15).
-                val pl = model.planet ?: return
-                xx15.set(pl.position).nor()
-                steer(ship, xx15, cnt = ship.nosev.dot(xx15))
-                return
-            }
-            ShipType.STATION -> {
-                // Estação hostil: 45% de chance de lançar um Viper (até 4 por perto).
-                if (dornd() < 140) return
-                if (model.ships.count { it.type == ShipType.VIPER } >= 4) return
-                spawnChild(ship, ShipType.VIPER, 0b11110001)
-                return
-            }
-            ShipType.THARGON -> if (model.ships.none { it.type == ShipType.THARGOID && !it.killed }) {
-                // TA13: sem a nave-mãe, o Thargon perde o E.C.M. e fica à deriva com metade da velocidade.
-                ship.aiFlag = ship.aiFlag and 0xFE
-                ship.speed /= 2f
-                return
-            }
-            else -> Unit
-        }
-        // Na zona segura, piratas e caçadores perdem a agressividade.
-        if (ship.type.isPirateClass && model.station != null) ship.aiFlag = ship.aiFlag and 0x81
+        if (ship.type == ShipType.MISSILE) { missileTactics(ship); return }
+        if (ship.type.isStation) { stationTactics(ship); return }
 
-        // Recarrega 1 de energia.
+        // TA13: recarrega 1 de energia.
         if (ship.energy < ship.blueprint.maxEnergy) ship.energy += 1f
 
-        // TA21/TA19: XX15 = vetor unitário de nós até a nave; CNT = nosev · XX15.
+        // TA21: sem a nave-mãe, o Thargon perde o E.C.M. e fica à deriva com metade da velocidade.
+        if (ship.type == ShipType.THARGON && many(ShipType.THARGOID) == 0) {
+            ship.aiFlag = ship.aiFlag and 0xFE
+            ship.speed /= 2f
+            return
+        }
+
+        // TA14/TN1: comerciantes só agem 39% das vezes.
+        if (ship.newb and Newb.TRADER != 0 && dornd() >= 100) return
+        // Caçadores de recompensas atacam infratores graves e fugitivos (FIST ≥ 40).
+        if (ship.newb and Newb.BOUNTY_HUNTER != 0 && model.player.legalStatus >= 40) ship.hostile = true
+        if (!ship.hostile) {
+            if (ship.newb and Newb.DOCKING != 0) dockIt(ship) else goToPlanet(ship)
+            return
+        }
+        // TN3: na zona segura, piratas perdem a agressividade.
+        if (ship.newb and Newb.PIRATE != 0 && model.station != null) ship.aiFlag = ship.aiFlag and 0x81
+
+        // TA19: XX15 = vetor unitário de nós até a nave; CNT = nosev · XX15.
         xx15.set(ship.position).nor()
         var cnt = ship.nosev.dot(xx15)
+
+        // A Anaconda lança Worms (22%).
+        if (ship.type == ShipType.ANACONDA && dornd() >= 200) {
+            spawnChild(ship, ShipType.WORM, 0b11110001)
+            return
+        }
 
         // 2.5%: uma rolagem forte.
         if (dornd() >= 250) ship.rollCounter = (dornd() or 104).toSigned()
 
         val maxE = ship.blueprint.maxEnergy.toFloat()
         if (ship.energy <= maxE / 2f) {
-            if (ship.energy <= maxE / 8f && dornd() >= 230 && ship.type != ShipType.THARGOID) {
-                // Quase sem energia: abandona a nave numa cápsula de fuga (SESCP).
+            // Quase sem energia: abandona a nave numa cápsula de fuga, se tiver uma (E% bit 7).
+            if (ship.energy <= maxE / 8f && dornd() >= 230 && ship.type.defaultNewb and 0x80 != 0) {
                 ship.aiFlag = 0
-                spawnChild(ship, ShipType.ESCAPE_POD, 0x80)
+                spawnChild(ship, ShipType.ESCAPE_POD, 0b11111110)
                 return
             }
-            // ta3: dispara um míssil, mais provável quanto mais mísseis tiver.
+            // ta3: dispara um míssil (o Thargoid, um Thargon), mais provável quanto mais tiver.
             if (ship.missiles > 0 && (dornd() and 31) < ship.missiles && !ecmActive) {
                 ship.missiles--
                 if (ship.type == ShipType.THARGOID) {
-                    // O Thargoid lança um Thargon em vez de um míssil.
                     spawnChild(ship, ShipType.THARGON, ship.aiFlag)
-                } else {
-                    spawnChild(ship, ShipType.MISSILE, 0b11000000, hostileToUs = true)
+                } else if (spawnChild(ship, ShipType.MISSILE, 0b11000000, hostileToUs = true)) {
                     messages += "INCOMING MISSILE"
                 }
+                return
             }
         }
 
@@ -447,20 +456,93 @@ class Combat(private val model: FlightModel) {
     }
 
     /**
-     * TA15/TA6/TA9: arfagem 3 para o lado de XX15 (sinal oposto a roofv·XX15), rolagem 5 se
-     * não estiver rolando forte, e aceleração 3 se estiver alinhada (CNT ≥ 22/36) ou −1
-     * (míssil −2) se estiver bem desalinhada (|CNT| ≥ 18/36).
+     * Estação: hostil, lança Vipers (6%, até 4 por perto); senão, sem Transporter por perto,
+     * lança de vez em quando (1.2%) um Shuttle ou um Transporter.
      */
-    private fun steer(ship: ShipInstance, dir: Vector3, cnt: Float) {
+    private fun stationTactics(st: ShipInstance) {
+        if (st.hostile) {
+            if (dornd() < 240 || many(ShipType.VIPER) >= 4) return
+            spawnChild(st, ShipType.VIPER, 0b11110001)
+            return
+        }
+        if (many(ShipType.TRANSPORTER) > 0 || dornd() < 253) return
+        spawnChild(st, if (rng.nextBoolean()) ShipType.SHUTTLE else ShipType.TRANSPORTER, 0b11110001)
+    }
+
+    /** GOPL (SPS1 + TA151): segue na direção do planeta. */
+    private fun goToPlanet(ship: ShipInstance) {
+        val pl = model.planet ?: return
+        ta151(ship, xx15.set(pl.position).nor(), rat = 3, rat2 = 4, cnt2 = 22)
+    }
+
+    /**
+     * TA151: CNT = nosev · direção; virada sempre aplicada (RAT2 = 0) se estiver apontando
+     * para o lado oposto (CNT ≤ −24/36); depois a manobra normal (TA15).
+     */
+    private fun ta151(ship: ShipInstance, dir: Vector3, rat: Int, rat2: Int, cnt2: Int) {
+        val cnt = ship.nosev.dot(dir)
+        steer(ship, dir, cnt, rat, if (cnt <= -24f / 36f) 0 else rat2, cnt2)
+    }
+
+    /**
+     * DOCKIT (versão das naves não jogadoras): longe da estação, segue para o planeta; à
+     * frente da fenda (cone de ~13°), vira para a estação devagar (velocidade 1) e, quando
+     * aponta para ela, alinha a rolagem e atraca — some da bolha (NEWB bit 7); fora do
+     * cone, vai para o ponto ideal de aproximação, 8 unidades de nosev à frente da fenda.
+     */
+    private fun dockIt(ship: ShipInstance) {
+        val st = model.station ?: return goToPlanet(ship)
+        k3.set(ship.position).sub(st.position) // VCSU1: da estação até a nave
+        if (FlightModel.maxSign(k3) > 0) return goToPlanet(ship)
+        xx15.set(k3).nor()
+        if (st.nosev.dot(xx15) < 35f / 36f) {
+            // PH1: rumo ao ponto ideal (estação + 768·nosev).
+            xx15.set(st.position).mulAdd(st.nosev, 768f).sub(ship.position).nor()
+            ta151(ship, xx15, rat = 3, rat2 = 6, cnt2 = 29)
+            return
+        }
+        if (ship.nosev.dot(xx15) <= -34f / 36f) {
+            // PH3/PH32: apontando para a estação — iguala a rolagem e atraca (TN13).
+            ship.pitchCounter = 0f
+            ship.rollCounter = 0f
+            if (abs(st.roofv.dot(ship.sidev)) >= 33f / 36f) {
+                ship.acceleration += 1f // TN11
+                ship.rollCounter = 127f
+            } else {
+                slowDown(ship)
+            }
+            ship.newb = ship.newb or Newb.GONE
+            return
+        }
+        // PH2: vira para a estação devagar.
+        ta151(ship, xx15.scl(-1f), rat = 3, rat2 = 6, cnt2 = 29)
+        slowDown(ship)
+    }
+
+    /** PH22: aceleração 0 e velocidade 1. */
+    private fun slowDown(ship: ShipInstance) {
+        ship.acceleration = 0f
+        ship.speed = 1f
+    }
+
+    /**
+     * TA15/TA6/TA9 com o nroll do original: arfagem ±[rat] para o lado de XX15 (0 se
+     * |roofv·XX15| < [rat2]/72), rolagem ±[rat] se não estiver rolando forte, e aceleração
+     * 3 se estiver alinhada (CNT ≥ [cnt2]/36) ou −1 (míssil −2) se desalinhada (|CNT| ≥ 18/36).
+     */
+    private fun steer(ship: ShipInstance, dir: Vector3, cnt: Float, rat: Int = 3, rat2: Int = 4, cnt2: Int = 22) {
+        val r = rat.toFloat()
+        val min = rat2 / 72f
         val roofDot = ship.roofv.dot(dir)
-        ship.pitchCounter = if (roofDot >= 0f) -3f else 3f
+        val pitchNegative = roofDot >= 0f // sinal oposto ao do produto escalar
+        ship.pitchCounter = if (abs(roofDot) >= min) (if (pitchNegative) -r else r) else 0f
         if (abs(ship.rollCounter) < 16f) {
             val sideDot = ship.sidev.dot(dir)
-            val sameSign = (sideDot < 0f) == (ship.pitchCounter < 0f)
-            ship.rollCounter = if (sameSign) -5f else 5f
+            val rollNegative = (sideDot < 0f) == pitchNegative
+            ship.rollCounter = if (abs(sideDot) >= min) (if (rollNegative) -r else r) else 0f
         }
         when {
-            cnt >= 22f / 36f -> ship.acceleration = 3f
+            cnt >= cnt2 / 36f -> ship.acceleration = 3f
             abs(cnt) >= 18f / 36f -> ship.acceleration = if (ship.type == ShipType.MISSILE) -2f else -1f
         }
         applyAcceleration(ship)
@@ -493,7 +575,7 @@ class Combat(private val model: FlightModel) {
         k3.set(p).sub(target.position)
         if (abs(k3.x) < 256f && abs(k3.y) < 256f && abs(k3.z) < 256f) {
             // Chegou ao alvo: a estação só destrói o míssil; outras naves explodem.
-            if (target.type != ShipType.STATION) kill(target, byUs = true)
+            if (!target.type.isStation) kill(target, byUs = true)
             kill(m, byUs = false)
             if (p.len() < 256f) model.player.damage(80f, front = p.z >= 0f)
             return
@@ -511,15 +593,28 @@ class Combat(private val model: FlightModel) {
 
     /**
      * SFS1: lança uma nave "filha" ([type]) da posição e orientação da nave [parent], com o
-     * byte de IA [ai]. Mísseis inimigos ([hostileToUs]) miram em nós.
+     * byte de IA [ai]; ela herda os bits hostil, pirata e atracando do NEWB do pai. Da
+     * estação, sai 192 unidades à frente da fenda a velocidade 32; pedaços (placa, contêiner,
+     * pedras) saem girando a até 15. Mísseis inimigos ([hostileToUs]) miram em nós.
+     * Retorna false se a nave não pôde ser criada (bolha cheia ou fora do arquivo de naves).
      */
-    private fun spawnChild(parent: ShipInstance, type: ShipType, ai: Int, hostileToUs: Boolean = false) {
+    private fun spawnChild(parent: ShipInstance, type: ShipType, ai: Int, hostileToUs: Boolean = false): Boolean {
         val child = ShipInstance(type, Vector3(parent.position))
         child.nosev.set(parent.nosev); child.roofv.set(parent.roofv); child.orthonormalize()
+        child.newb = (parent.newb and 0b00011100) or child.newb
         child.aiFlag = ai
         child.speed = if (type == ShipType.MISSILE) parent.speed * 2f else parent.speed
-        if (type == ShipType.VIPER) child.speed = type.blueprint.maxSpeed / 2f
+        if (parent.type.isStation) {
+            child.position.mulAdd(parent.nosev, 192f)
+            child.speed = 32f
+        }
+        if (type.id in ShipType.ALLOY_PLATE.id..ShipType.SPLINTER.id) {
+            val r = dornd(); val x = dornd()
+            child.pitchCounter = ((r shl 1) and 0xFF).toSigned()
+            child.speed = (x and 15).toFloat()
+            child.rollCounter = if (r and 0x80 != 0) 127f else -127f
+        }
         if (hostileToUs) child.aiFlag = child.aiFlag or 0x40
-        model.addShip(child)
+        return model.spawn(child)
     }
 }

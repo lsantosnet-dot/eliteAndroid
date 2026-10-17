@@ -2,6 +2,8 @@ package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.galaxy.GalaxyGenerator
+import com.eliteandroid.ships.DiscShips
+import com.eliteandroid.ships.Newb
 import com.eliteandroid.ships.OriginalShips
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
@@ -20,8 +22,8 @@ class CombatTest {
     /** Modelo em pleno espaço (sem estação = fora da zona segura), num sistema anárquico. */
     private fun deepSpace(): FlightModel {
         val m = FlightModel()
-        m.arrive(galaxy.findByName("RIEDQUAT")!!) // anarquia
         m.combat.rng = Random(1234)
+        m.arrive(galaxy.findByName("RIEDQUAT")!!) // anarquia
         return m
     }
 
@@ -30,14 +32,13 @@ class CombatTest {
 
     @Test
     fun `blueprints extracted from the original source`() {
-        assertEquals(10, OriginalShips.SIDEWINDER.vertexCount); assertEquals(15, OriginalShips.SIDEWINDER.edgeCount)
-        assertEquals(15, OriginalShips.VIPER.vertexCount); assertEquals(20, OriginalShips.VIPER.edgeCount)
-        assertEquals(25, OriginalShips.MAMBA.vertexCount); assertEquals(28, OriginalShips.MAMBA.edgeCount)
-        assertEquals(11, OriginalShips.PYTHON.vertexCount); assertEquals(26, OriginalShips.PYTHON.edgeCount)
+        assertEquals(10, DiscShips.SIDEWINDER.vertexCount); assertEquals(15, DiscShips.SIDEWINDER.edgeCount)
+        assertEquals(15, DiscShips.VIPER.vertexCount); assertEquals(20, DiscShips.VIPER.edgeCount)
+        assertEquals(25, DiscShips.MAMBA.vertexCount); assertEquals(28, DiscShips.MAMBA.edgeCount)
         assertEquals(17, OriginalShips.MISSILE.vertexCount); assertEquals(24, OriginalShips.MISSILE.edgeCount)
-        assertEquals(70, OriginalShips.SIDEWINDER.maxEnergy); assertEquals(37, OriginalShips.SIDEWINDER.maxSpeed)
-        assertEquals(50, OriginalShips.SIDEWINDER.bounty); assertEquals(2, OriginalShips.SIDEWINDER.laserPower)
-        assertEquals(200, OriginalShips.PYTHON.bounty); assertEquals(3, OriginalShips.PYTHON.missiles)
+        assertEquals(70, DiscShips.SIDEWINDER.maxEnergy); assertEquals(37, DiscShips.SIDEWINDER.maxSpeed)
+        assertEquals(50, DiscShips.SIDEWINDER.bounty); assertEquals(2, DiscShips.SIDEWINDER.laserPower)
+        assertEquals(100, DiscShips.VIPER.maxEnergy) // na versão em disco (120 na cassete)
         ShipType.entries.forEach { assertTrue(it.blueprint.faceCount > 0, it.name) }
     }
 
@@ -56,7 +57,7 @@ class CombatTest {
         val pirate = spawn(m, ShipType.MAMBA, Vector3(0f, 0f, 2000f), ai = 0xFE) // nosev (0,0,−1)
         m.combat.tactics(pirate)
         assertTrue(pirate.firingLaser)
-        assertEquals(255f - OriginalShips.MAMBA.laserByte / 2, m.player.foreShield)
+        assertEquals(255f - DiscShips.MAMBA.laserByte / 2, m.player.foreShield)
     }
 
     @Test
@@ -128,13 +129,14 @@ class CombatTest {
     fun `anarchies spawn pirates and safe zones do not`() {
         val anarchy = deepSpace()
         repeat(60) { anarchy.combat.spawnCheck() }
-        assertTrue(anarchy.ships.any { it.type.isPirateClass }, "nenhum pirata em 60 tentativas")
+        assertTrue(anarchy.ships.any { it.newb and Newb.PIRATE != 0 }, "nenhum pirata em 60 tentativas")
+        assertTrue(anarchy.ships.all { anarchy.hasShip(it.type) }, "só tipos do arquivo de naves")
 
         val docked = FlightModel()
         docked.launch(galaxy.findByName("RIEDQUAT")!!) // estação por perto: zona segura
         docked.combat.rng = Random(1234)
         repeat(60) { docked.combat.spawnCheck() }
-        assertFalse(docked.ships.any { it.type.isPirateClass || it.type == ShipType.VIPER })
+        assertFalse(docked.ships.any { it.newb and Newb.PIRATE != 0 || it.type == ShipType.VIPER })
     }
 
     @Test

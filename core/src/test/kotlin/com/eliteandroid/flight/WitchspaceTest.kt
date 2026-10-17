@@ -4,7 +4,7 @@ import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.GameSession
 import com.eliteandroid.economy.Commodities
 import com.eliteandroid.galaxy.GalaxyGenerator
-import com.eliteandroid.ships.OriginalShips
+import com.eliteandroid.ships.DiscShips
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -29,11 +29,11 @@ class WitchspaceTest {
 
     @Test
     fun `thargoid blueprints from the original source`() {
-        assertEquals(20, OriginalShips.THARGOID.vertexCount); assertEquals(26, OriginalShips.THARGOID.edgeCount)
-        assertEquals(240, OriginalShips.THARGOID.maxEnergy); assertEquals(500, OriginalShips.THARGOID.bounty)
-        assertEquals(6, OriginalShips.THARGOID.missiles) // Thargons a bordo
-        assertEquals(10, OriginalShips.THARGON.vertexCount); assertEquals(15, OriginalShips.THARGON.edgeCount) // arestas do contêiner
-        assertEquals(50, OriginalShips.THARGON.bounty)
+        assertEquals(20, DiscShips.THARGOID.vertexCount); assertEquals(26, DiscShips.THARGOID.edgeCount)
+        assertEquals(240, DiscShips.THARGOID.maxEnergy); assertEquals(500, DiscShips.THARGOID.bounty)
+        assertEquals(6, DiscShips.THARGOID.missiles) // Thargons a bordo
+        assertEquals(10, DiscShips.THARGON.vertexCount); assertEquals(15, DiscShips.THARGON.edgeCount) // arestas do contêiner
+        assertEquals(50, DiscShips.THARGON.bounty)
     }
 
     @Test

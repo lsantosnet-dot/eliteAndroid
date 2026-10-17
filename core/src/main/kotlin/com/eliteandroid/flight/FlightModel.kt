@@ -4,7 +4,7 @@ import com.badlogic.gdx.math.Vector3
 import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.Stardust
-import com.eliteandroid.ships.Blueprints
+import com.eliteandroid.ships.DiscShips
 import com.eliteandroid.ships.ShipInstance
 import com.eliteandroid.ships.ShipType
 import com.eliteandroid.ships.SpaceObject
@@ -70,6 +70,39 @@ class FlightModel {
     /** Contagem regressiva do hiperespaço (QQ22). */
     val hyperspace = HyperspaceCountdown()
 
+    /**
+     * LOMOD: o arquivo de naves carregado (D.MOA … D.MOP da versão em disco). Só os tipos
+     * presentes nele podem surgir; a estação é a Coriolis ou a Dodecaedro conforme o arquivo.
+     */
+    var shipFile: Map<Int, com.eliteandroid.ships.ShipBlueprint> = DiscShips.SHIP_FILES[0]
+        private set
+    var shipFileIndex = 0
+        private set
+
+    /**
+     * LOMOD: escolhe o arquivo de naves de um sistema: 2 bits aleatórios, depois governo
+     * ≥ 3 (estável) e tech level ≥ 10 (interno) — "A" a "P". (O arquivo forçado pelas
+     * missões fica de fora.)
+     */
+    fun loadShipFile(system: PlanetSystem?) {
+        if (system == null) return selectShipFile(0)
+        var a = combat.rng.nextInt(256) and 3
+        a = (a shl 1) or (if (system.governmentCode >= 3) 1 else 0)
+        a = (a shl 1) or (if (system.techLevel >= 10) 1 else 0)
+        selectShipFile(a)
+    }
+
+    fun selectShipFile(index: Int) {
+        shipFileIndex = index
+        shipFile = DiscShips.SHIP_FILES[index]
+    }
+
+    /** O tipo [type] está no arquivo de naves carregado (o míssil está sempre). */
+    fun hasShip(type: ShipType): Boolean = type == ShipType.MISSILE || shipFile[type.id] === type.blueprint
+
+    /** Tipo da estação no arquivo atual: Dodecaedro (sistemas de tech level alto) ou Coriolis. */
+    val stationType: ShipType get() = if (hasShip(ShipType.DODO)) ShipType.DODO else ShipType.STATION
+
     /** MJ: estamos no witchspace (sem planeta, sol nem estação; só Thargoids). */
     var witchspace = false
         private set
@@ -84,12 +117,11 @@ class FlightModel {
         dust.active = dust.count
         combat.reset()
         system?.let { combat.government = it.governmentCode }
+        loadShipFile(system) // RSHIPS
         playerDestroyed = false
         sun = null
         planet = Planet(Vector3(0f, 0f, 65536f), hasCrater = system?.let { (it.techLevel and 2) != 0 } ?: false)
-        val st = ShipInstance(Blueprints.CORIOLIS, Vector3(0f, 0f, -256f), NeonPalette.STATION)
-            .orient(Vector3(0f, 0f, 1f)) // ZINF + NwS1 (nosev invertido) + TIDY
-        st.rollCounter = -127f // NWSPS: contador 255 = rolagem anti-horária máxima, sem amortecimento
+        val st = newStation(Vector3(0f, 0f, -256f)).orient(Vector3(0f, 0f, 1f)) // ZINF + NwS1 (nosev invertido) + TIDY
         addShip(st)
         station = st
         player.reset()
@@ -113,6 +145,7 @@ class FlightModel {
         station = null
         combat.reset()
         combat.government = system.governmentCode
+        loadShipFile(system)
         playerDestroyed = false
         player.legalStatus = player.legalStatus ushr 1 // SOLAR: LSR FIST
         val seed = system.seed
@@ -145,6 +178,7 @@ class FlightModel {
         combat.reset()
         playerDestroyed = false
         witchspace = true
+        selectShipFile(3) // MJP: arquivo D, um dos que têm Thargoids
         while (ships.count { it.type == ShipType.THARGOID } < 4) combat.spawnThargoid()
         player.resetAfterJump()
         hyperspace.cancel()
@@ -159,9 +193,9 @@ class FlightModel {
      * a menos de 2 unidades de sign (131072) em todos os eixos.
      */
     fun inSystemJump(): Boolean {
-        // Asteroides, contêineres e cápsulas não impedem o salto; qualquer outra nave, sim.
-        val junk = setOf(ShipType.ASTEROID, ShipType.CANISTER, ShipType.ESCAPE_POD)
-        if (witchspace || station != null || ships.any { !it.killed && it.type !in junk }) return false
+        // O "lixo" (JUNK: cápsulas, placas, contêineres, pedras, Shuttles e Transporters) não
+        // impede o salto; qualquer outra nave, sim.
+        if (witchspace || station != null || ships.any { !it.killed && !it.type.isJunk }) return false
         for (body in listOfNotNull(planet, sun)) {
             val p = body.position
             if (p.z >= 0f && maxSign(p) < 2) return false
@@ -244,9 +278,8 @@ class FlightModel {
         if (station != null || maxSign(pl.position) > 0) return false
         val spot = Vector3(pl.position).mulAdd(pl.nosev, 2f * Planet.RADIUS)
         if (abs(spot.x) >= 192f * 256f || abs(spot.y) >= 192f * 256f || abs(spot.z) >= 192f * 256f) return false
-        val st = ShipInstance(Blueprints.CORIOLIS, spot, NeonPalette.STATION)
+        val st = newStation(spot)
         st.nosev.set(pl.nosev).scl(-1f); st.roofv.set(pl.roofv); st.orthonormalize()
-        st.rollCounter = -127f
         addShip(st)
         station = st
         sun = null
@@ -304,9 +337,34 @@ class FlightModel {
         return player.dockingComputer && !st.hostile
     }
 
+    /**
+     * NWSPS: a estação do arquivo de naves, com IA e E.C.M. (%10000001) e rolagem
+     * anti-horária máxima sem amortecimento (contador 255).
+     */
+    private fun newStation(pos: Vector3): ShipInstance {
+        val st = ShipInstance(stationType, pos)
+        st.color = NeonPalette.STATION
+        st.aiFlag = 0b10000001
+        st.rollCounter = -127f
+        return st
+    }
+
+    /** Põe [ship] na bolha local sem checagens (lançamento, testes e capturas de tela). */
     fun addShip(ship: ShipInstance) {
         ship.slot = combat.nextSlot()
         ships += ship
+    }
+
+    /**
+     * NWSHP: cria uma nave, se o tipo estiver no arquivo de naves e houver vaga na bolha
+     * local (NOSH = 12 posições, uma delas do planeta e outra do sol ou da estação).
+     */
+    fun spawn(ship: ShipInstance): Boolean {
+        if (!hasShip(ship.type)) return false
+        val used = ships.count { !it.type.isStation } + 2
+        if (used >= NOSH) return false
+        addShip(ship)
+        return true
     }
 
     /** Bússola: a estação, se existir (zona segura), senão o planeta. */
@@ -332,6 +390,9 @@ class FlightModel {
     }
 
     companion object {
+        /** NOSH: posições da bolha local (planeta, sol/estação e naves). */
+        const val NOSH = 12
+
         /** Uma unidade do byte de "sinal" das coordenadas de 24 bits do original. */
         const val SIGN_UNIT = 65536f
 

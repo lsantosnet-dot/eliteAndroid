@@ -1,9 +1,10 @@
-# Gera core/.../ships/OriginalShips.kt a partir do elite-source.asm de Mark Moxon:
+# Gera core/.../ships/OriginalShips.kt (o míssil, que na versão em disco fica fora dos
+# arquivos de naves) a partir do elite-source.asm de Mark Moxon:
 #   curl -O https://raw.githubusercontent.com/markmoxon/elite-source-code-bbc-micro-cassette/main/1-source-files/main-sources/elite-source.asm
 #   python3 tools/extract_ships.py elite-source.asm core/src/main/kotlin/com/eliteandroid/ships/OriginalShips.kt
 import re, sys
 src = open(sys.argv[1]).read().split('\n')
-ships = ['SIDEWINDER','VIPER','MAMBA','PYTHON','MISSILE','ASTEROID','CANISTER','ESCAPE_POD','THARGOID','THARGON','COBRA_MK_3','CORIOLIS']
+ships = ['MISSILE']  # as demais naves vêm da versão em disco (tools/extract_disc_ships.py)
 out = []
 def block(name):
     start = src.index('.SHIP_'+name)

@@ -14,8 +14,11 @@ import com.badlogic.gdx.math.Vector3
  * de arestas é a distância máxima (em unidades de z_hi) em que o detalhe ainda é
  * desenhado — 31 = sempre.
  *
- * As normais das faces são calculadas a partir da geometria (os valores do original são
- * aproximações inteiras dessas mesmas normais).
+ * As normais das faces vêm do bloco FACE do original quando ele é fornecido (modelos da
+ * versão em disco): como no LL9, a própria normal (escalada por 2^[normalScale]) serve de
+ * ponto sobre a face, e faces sem normal (como a 15 das placas de liga) estão sempre
+ * visíveis. Sem o bloco FACE, as normais são calculadas a partir da geometria (os valores
+ * do original são aproximações inteiras dessas mesmas normais).
  */
 class ShipBlueprint private constructor(
     val name: String,
@@ -43,7 +46,24 @@ class ShipBlueprint private constructor(
     val gunVertex: Int,
     /** (Byte #7 − 6)/4: quantos vértices geram nuvens na explosão. */
     val explosionVertices: Int,
+    /** Byte #0, bits 4-7 (versão em disco): mercadoria − 1 ao ser recolhida (0 = nenhuma). */
+    private val cargoItem: Int,
+    /** Normais do bloco FACE (x, y, z, visibilidade por face) e a escala delas (byte #18); vazio = calcular. */
+    private val sourceFaces: IntArray,
+    private val normalScale: Int,
 ) {
+    /** Mercadoria (0..16) obtida ao recolher este objeto com os coletores, ou −1. */
+    val scoopItem: Int get() = if (cargoItem > 0) cargoItem + 1 else -1
+
+    /** Faces sem normal no original: sempre visíveis (LL9). */
+    val faceAlwaysVisible: BooleanArray = BooleanArray(faceCount)
+
+    /**
+     * LL9 parte 5: com a distância XX4 (0..31) maior que este valor, a face é desenhada sem
+     * testar a normal (31 = sempre testa).
+     */
+    val faceVisibility: IntArray = IntArray(faceCount) { 31 }
+
     val laserPower: Int get() = laserByte ushr 3
     val missiles: Int get() = laserByte and 7
 
@@ -66,7 +86,7 @@ class ShipBlueprint private constructor(
             r2 = maxOf(r2, x * x + y * y + z * z)
         }
         boundingRadius = kotlin.math.sqrt(r2)
-        computeFaces()
+        if (sourceFaces.isEmpty()) computeFaces() else useSourceFaces()
     }
 
     fun vertex(i: Int, out: Vector3): Vector3 = out.set(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2])
@@ -81,6 +101,24 @@ class ShipBlueprint private constructor(
             }
         }
         return set
+    }
+
+    private fun useSourceFaces() {
+        val n = Vector3()
+        val scale = (1 shl normalScale).toFloat()
+        for (f in 0 until faceCount) {
+            val i = f * 3
+            val src = f * 4
+            if (src + 3 >= sourceFaces.size || (sourceFaces[src] == 0 && sourceFaces[src + 1] == 0 && sourceFaces[src + 2] == 0)) {
+                faceAlwaysVisible[f] = true
+                continue
+            }
+            faceVisibility[f] = sourceFaces[src + 3]
+            n.set(sourceFaces[src].toFloat(), sourceFaces[src + 1].toFloat(), sourceFaces[src + 2].toFloat())
+            facePoints[i] = n.x * scale; facePoints[i + 1] = n.y * scale; facePoints[i + 2] = n.z * scale
+            n.nor()
+            faceNormals[i] = n.x; faceNormals[i + 1] = n.y; faceNormals[i + 2] = n.z
+        }
     }
 
     private fun computeFaces() {
@@ -133,10 +171,24 @@ class ShipBlueprint private constructor(
 
         private var energy = 0; private var speed = 0; private var laserByte = 0
         private var bounty = 0; private var canisters = 0; private var gunVertex = 0; private var explosion = 4
+        private var cargoItem = 0
+        private val faceData = ArrayList<Int>()
 
-        fun stats(energy: Int, speed: Int, laserByte: Int, bounty: Int, canisters: Int, gunVertex: Int, explosionVertices: Int) {
+        /** Byte #18 do bloco do modelo: as normais do bloco FACE estão escaladas por 2^n. */
+        var normalScale = 0
+
+        fun stats(
+            energy: Int, speed: Int, laserByte: Int, bounty: Int, canisters: Int, gunVertex: Int,
+            explosionVertices: Int, cargoItem: Int = 0,
+        ) {
             this.energy = energy; this.speed = speed; this.laserByte = laserByte; this.bounty = bounty
             this.canisters = canisters; this.gunVertex = gunVertex; this.explosion = explosionVertices
+            this.cargoItem = cargoItem
+        }
+
+        /** FACE: normal de uma face e sua distância de visibilidade, na ordem do original. */
+        fun face(nx: Int, ny: Int, nz: Int, visibility: Int = 31) {
+            faceData += nx; faceData += ny; faceData += nz; faceData += visibility
         }
 
         fun vertex(x: Int, y: Int, z: Int) {
@@ -157,8 +209,9 @@ class ShipBlueprint private constructor(
         fun build(): ShipBlueprint =
             ShipBlueprint(
                 name, verts.toFloatArray(), edgeData.toIntArray(), edgeVis.toIntArray(),
-                edgeDet.toBooleanArray(), faces, visibilityDistance, targetableArea,
+                edgeDet.toBooleanArray(), maxOf(faces, faceData.size / 4), visibilityDistance, targetableArea,
                 energy, speed, bounty, laserByte, canisters, gunVertex, explosion,
+                cargoItem, faceData.toIntArray(), normalScale,
             )
     }
 
