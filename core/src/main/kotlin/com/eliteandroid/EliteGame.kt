@@ -2,14 +2,14 @@ package com.eliteandroid
 
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
-import com.badlogic.gdx.graphics.GL20
 import com.eliteandroid.galaxy.Galaxy
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
+import com.eliteandroid.render.SpaceView
 
 /**
- * Ponto de entrada LibGDX (multiplataforma). Na Etapa 1 só mantém o estado da galáxia
- * e limpa a tela; o renderizador wireframe entra na Etapa 2.
+ * Ponto de entrada LibGDX (multiplataforma). Mantém o estado da galáxia e desenha a
+ * vista espacial em wireframe neon.
  */
 class EliteGame : ApplicationAdapter() {
 
@@ -20,8 +20,26 @@ class EliteGame : ApplicationAdapter() {
     var currentSystem: PlanetSystem = galaxy[7]
         private set
 
+    lateinit var scene: DemoScene
+        private set
+    private lateinit var view: SpaceView
+
+    override fun create() {
+        scene = DemoScene()
+        view = SpaceView()
+        view.resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
+    }
+
+    override fun resize(width: Int, height: Int) {
+        view.resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
+    }
+
     override fun render() {
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
+        scene.update(minOf(Gdx.graphics.deltaTime, 1f / 15f))
+        view.render(scene.ships, scene.dust)
+    }
+
+    override fun dispose() {
+        view.dispose()
     }
 }

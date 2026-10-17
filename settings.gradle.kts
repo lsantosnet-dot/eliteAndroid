@@ -19,6 +19,9 @@ rootProject.name = "EliteAndroid"
 // :core é Kotlin/JVM puro (lógica do jogo + LibGDX core) e compila/testa sem Android SDK.
 include(":core")
 
+// :desktop (LWJGL3) roda o jogo no PC para desenvolvimento rápido e capturas de tela.
+include(":desktop")
+
 // :android só é incluído quando há um Android SDK disponível (ANDROID_HOME / local.properties).
 // Isso permite rodar `./gradlew :core:test` em CI ou máquinas sem SDK.
 val localProps = file("local.properties")

@@ -10,13 +10,16 @@ Referências: *Mark Moxon's Elite Disassembly* e *Text Elite* (Ian Bell).
 ```
 core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Android SDK)
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
+  ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), ShipInstance (nosev/roofv/sidev)
+  render/   WireframeProjector, NeonLineBatch, BloomRenderer, Stardust, SpaceView
 android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
+desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 ```
 
 ## Etapas
 
 1. ✅ Estrutura do projeto + gerador de galáxias Text Elite
-2. ⏳ Renderização 3D wireframe neon + Cobra Mk III e estação Coriolis
+2. ✅ Renderização 3D wireframe neon + Cobra Mk III e estação Coriolis
 3. ⏳ Física de voo, câmeras e docking
 4. ⏳ Scanner 3D e HUD
 5. ⏳ Controles touch
@@ -27,7 +30,9 @@ android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
 Requisitos: JDK 17+, Android SDK (API 35).
 
 ```bash
-./gradlew :core:test          # testes do gerador (não precisa de Android SDK)
+./gradlew :core:test          # testes (não precisa de Android SDK)
+./gradlew :desktop:run        # roda no PC
+./gradlew :desktop:run --args="--screenshot shot.png --time 9"   # salva captura e sai
 ./gradlew :android:installDebug
 ```
 
@@ -45,3 +50,16 @@ O módulo `:android` só é incluído quando há `ANDROID_HOME`/`ANDROID_SDK_ROO
 
 Valores verificados em teste: Lave (20,173), Rich Agri, Dictatorship, TL 5, 2.5 bi,
 7000 M CR, raio 4116, *"Lave is most famous for its vast rain forests and the Lavian tree grub."*
+
+## Renderização wireframe (Etapa 2)
+
+![Coriolis e Cobra Mk III](docs/etapa2.png)
+
+- Modelos transcritos dos blocos VERTEX/EDGE do BBC Elite (Coriolis: 16 vértices,
+  28 arestas, 14 faces; Cobra Mk III: 28 vértices, 38 arestas, 13 faces). Um teste
+  confere que cada face é plana e convexa, validando a transcrição.
+- Linhas ocultas como no LL9: a aresta aparece se uma de suas faces está voltada para
+  o jogador; detalhes (motores, retro-foguetes, canhão) somem com a distância.
+- Projeção x/z·largura (mesma razão do original: 256 px de vista → ~53° de campo).
+- Jogador sempre na origem olhando para +z; naves orientadas por nosev/roofv/sidev.
+- Neon: linhas como quads com núcleo quase branco + bloom em 2 níveis + scanlines.
