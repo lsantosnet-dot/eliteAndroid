@@ -8,12 +8,13 @@ import com.badlogic.gdx.math.Rectangle
 import com.eliteandroid.flight.FlightEvent
 import com.eliteandroid.flight.FlightModel
 import com.eliteandroid.flight.View
+import com.eliteandroid.hud.Dashboard
 import com.eliteandroid.input.FlightInput
+import com.eliteandroid.render.HudLayer
 import com.eliteandroid.render.LaunchTunnel
 import com.eliteandroid.render.NeonLineBatch
 import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.SpaceView
-import java.util.Locale
 
 /**
  * Ciclo de jogo da Etapa 3: atracado → túnel de lançamento → voo → (atracação → túnel →
@@ -25,6 +26,7 @@ class GameSession(private val stationName: String) {
 
     val model = FlightModel()
     val input = FlightInput()
+    val dashboard = Dashboard()
 
     var state = State.DOCKED
         private set
@@ -76,14 +78,26 @@ class GameSession(private val stationName: String) {
         messageTime = 1f
     }
 
+    fun layout(width: Float, height: Float) {
+        input.layout(width, height)
+        dashboard.layout(width, height)
+    }
+
     fun render(view: SpaceView) {
         val flying = state == State.FLYING
         view.render(
             ships = if (flying) model.ships else emptyList(),
             dust = if (flying) model.dust else null,
             view = model.view,
-            overlayLines = { lines -> drawLines(view, lines) },
-            overlayText = { batch, font -> drawText(view, batch, font) },
+            hud = object : HudLayer {
+                override fun worldLines(lines: NeonLineBatch) = drawLines(view, lines)
+                override fun panels(out: (Rectangle) -> Unit) { if (flying) out(dashboard.bounds) }
+                override fun panelLines(lines: NeonLineBatch) { if (flying) dashboard.drawLines(lines, model) }
+                override fun text(batch: SpriteBatch, font: BitmapFont) {
+                    drawText(view, batch, font)
+                    if (flying) dashboard.drawText(batch, font)
+                }
+            },
         )
     }
 
@@ -149,12 +163,6 @@ class GameSession(private val stationName: String) {
             }
             State.FLYING -> {
                 centered(batch, font, model.view.label, w / 2f, h - font.lineHeight * 0.6f)
-                val p = model.player
-                val hud = String.format(
-                    Locale.US, "SPEED %2d   ROLL %+4d   PITCH %+4d   SHIELD %3d  ENERGY %3d",
-                    p.speed.toInt(), p.jstx.toInt(), p.jsty.toInt(), p.foreShield.toInt(), p.energy.toInt(),
-                )
-                font.draw(batch, hud, font.lineHeight * 0.5f, font.lineHeight * 1.2f)
                 VIEW_LABELS.forEachIndexed { i, s ->
                     val r = input.viewButtons[i]
                     centered(batch, font, s, r.x + r.width / 2f, r.y + r.height * 0.65f)

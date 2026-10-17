@@ -33,6 +33,23 @@ class PlayerShip {
     var foreShield = 255f
     var aftShield = 255f
 
+    /** QQ14: combustível em décimos de ano-luz (tanque cheio = 70 = 7.0 LY). */
+    var fuel = 70f
+    /** CABTMP: temperatura da cabine (sobe perto do sol; 30 no espaço aberto). */
+    var cabinTemp = 30f
+    /** GNTMP: temperatura do laser. */
+    var laserTemp = 0f
+    /** ALTIT: altitude acima do planeta (255 = longe de qualquer planeta). */
+    var altitude = 255f
+    /** NOMSL: mísseis a bordo (o Cobra começa com 3, máximo 4). */
+    var missiles = 3
+    /** ECM instalado (bulbo "E" do painel). */
+    var hasEcm = false
+
+    /** MCNT: contador do loop principal (agenda recargas e o pisca do painel). */
+    var mainLoopCounter = 0f
+        private set
+
     /** α e β do ciclo atual (rad por ciclo). */
     var alpha = 0f
         private set
@@ -42,7 +59,26 @@ class PlayerShip {
     fun reset(launchSpeed: Float = LAUNCH_SPEED) {
         jstx = 0f; jsty = 0f; speed = launchSpeed
         energy = 255f; foreShield = 255f; aftShield = 255f
+        cabinTemp = 30f; laserTemp = 0f; altitude = 255f
         alpha = 0f; beta = 0f
+    }
+
+    /**
+     * Loop principal parte 13: a cada 8 ciclos, se a energia estiver acima de 50%
+     * (bit 7 de ENERGY), cada escudo recarrega 1 (SHD); depois a energia sobe 1.
+     */
+    fun updateSystems(f: Float) {
+        val before = mainLoopCounter.toInt()
+        mainLoopCounter += f
+        val after = mainLoopCounter.toInt()
+        for (tick in before + 1..after) {
+            if (tick % 8 != 0) continue
+            if (energy >= 128f) {
+                aftShield = (aftShield + 1f).coerceAtMost(255f)
+                foreShield = (foreShield + 1f).coerceAtMost(255f)
+            }
+            energy = (energy + 1f).coerceAtMost(255f)
+        }
     }
 
     /**

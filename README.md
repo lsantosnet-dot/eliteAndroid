@@ -12,6 +12,7 @@ core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Andro
   galaxy/   Seed (6 bytes), GalaxyGenerator, PlanetSystem, GoatSoup (descrições)
   ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), ShipInstance (nosev/roofv/sidev)
   flight/   FlightModel (MVEIT, ISDK), PlayerShip (JSTX/JSTY, α/β, DELTA), View (PLUT)
+  hud/      Dashboard (DIALS, COMPAS), Scanner (SCAN — radar 3D "prato")
   input/    FlightInput (teclado do original + toque provisório)
   render/   WireframeProjector, NeonLineBatch, BloomRenderer, Stardust, LaunchTunnel, SpaceView
 android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
@@ -23,7 +24,7 @@ desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 1. ✅ Estrutura do projeto + gerador de galáxias Text Elite
 2. ✅ Renderização 3D wireframe neon + Cobra Mk III e estação Coriolis
 3. ✅ Física de voo, câmeras e docking
-4. ⏳ Scanner 3D e HUD
+4. ✅ Scanner 3D e HUD
 5. ⏳ Controles touch
 6. ⏳ Economia, mercado e hiperespaço
 
@@ -102,3 +103,29 @@ usamos 12 ciclos/s (`FlightModel.TICK_RATE`), simulados em passos fixos de 1/60 
 | Velocidade | Espaço acelera, `/` desacelera | faixa à direita |
 | Vistas | F1–F4 ou 1–4 | botões F R L D |
 | Decolar | `L` ou Enter | botão LAUNCH |
+
+## Radar 3D e painel do cockpit (Etapa 4)
+
+![Painel do cockpit](docs/etapa4-painel.png)
+
+O painel segue o layout do BBC Elite num sistema virtual de 256 × 64, escalado e
+centralizado embaixo (os lados ficam livres para os controles touch):
+
+- **Radar "prato"** (SCAN): aparecem naves com |x|, |y|, |z| < 64·256. O ponto fica em
+  x = 123 + x_hi; a base da haste em 220 − z_hi/4 (à frente = mais para cima no prato);
+  a haste sobe/desce −y_hi/2, com o ponto limitado a 194..246. Sempre no referencial da
+  vista frontal, qualquer que seja a câmera.
+- **Barras** (DIALS/DILX, 16 passos): FS/AS = escudo/16, FV = combustível/4,
+  CT/LT = temperatura/16, AL = altitude/16, SP = velocidade/2, e os bancos de energia
+  1–4 = ENERGY/4 em blocos de 16 (o de baixo enche primeiro; o de cima vai até 15).
+  Valores perigosos piscam em vermelho (PZW): escudos/combustível/energia abaixo de 3
+  passos, temperaturas a partir de 11, velocidade a partir de 14.
+- **RL / DC**: marcador na posição 8 ∓ ALP1/4 (rolagem) e 8 + β com o ajuste de 1 do
+  original (arfagem).
+- **Bússola** (COMPAS): vetor unitário até a estação ×96/10 (±9 px); amarela se à
+  frente, verde se atrás.
+- **Mísseis** (4 posições, o Cobra sai com 3) e bulbos **S** (estação por perto) e **E**.
+- **Recarga** (loop principal parte 13): a cada 8 ciclos, com energia acima de 50%, os
+  escudos sobem 1; depois a energia sobe 1.
+
+Ainda não há planeta, então a altitude fica no máximo e a bússola aponta para a estação.

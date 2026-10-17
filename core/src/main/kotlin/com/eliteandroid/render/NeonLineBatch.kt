@@ -48,12 +48,15 @@ class NeonLineBatch(private val maxSegments: Int = 4096) : SegmentSink, Disposab
         segments = 0
     }
 
-    override fun segment(x0: Float, y0: Float, x1: Float, y1: Float, color: Float) {
+    override fun segment(x0: Float, y0: Float, x1: Float, y1: Float, color: Float) =
+        segment(x0, y0, x1, y1, color, halfWidth)
+
+    /** Segmento com meia largura [hw] própria (barras do painel, hastes do radar). */
+    fun segment(x0: Float, y0: Float, x1: Float, y1: Float, color: Float, hw: Float) {
         if (segments == maxSegments) flush()
         var dx = x1 - x0; var dy = y1 - y0
         val len = sqrt(dx * dx + dy * dy)
         if (len < 1e-4f) { dx = 1f; dy = 0f } else { dx /= len; dy /= len }
-        val hw = halfWidth
         // Estende as pontas meia largura para fechar as junções entre arestas.
         val ex = dx * hw; val ey = dy * hw
         val nx = -dy * hw; val ny = dx * hw

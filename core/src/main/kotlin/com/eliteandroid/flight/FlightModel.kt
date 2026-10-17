@@ -90,6 +90,7 @@ class FlightModel {
             ship.applyPlayerMotion(alpha, beta, distance)
         }
         dust.update(alpha, beta, distance, view)
+        player.updateSystems(f)
 
         return checkDocking(f)
     }

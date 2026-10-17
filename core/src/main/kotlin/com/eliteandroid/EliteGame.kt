@@ -33,7 +33,7 @@ class EliteGame : ApplicationAdapter() {
     override fun resize(width: Int, height: Int) {
         val w = Gdx.graphics.backBufferWidth; val h = Gdx.graphics.backBufferHeight
         view.resize(w, h)
-        session.input.layout(w.toFloat(), h.toFloat())
+        session.layout(w.toFloat(), h.toFloat())
     }
 
     override fun render() {
