@@ -386,7 +386,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         p.escapePod = s.escapePod
         p.energyBomb = s.energyBomb
         p.energyUnit = s.energyUnit
-        p.dockingComputer = s.dockingComputer
+        p.dockingComputer = true // de fábrica: também nos comandantes salvos antes
         p.galacticHyperdrive = s.galacticHyperdrive
         p.navyEnergyUnit = s.navyEnergyUnit
         model.missionFlags = s.missions

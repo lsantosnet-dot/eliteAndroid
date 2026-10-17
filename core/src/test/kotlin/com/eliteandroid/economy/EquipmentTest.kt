@@ -133,7 +133,7 @@ class EquipmentTest {
         storage.write(s.snapshot().copy(system = hiTech.index).encode())
         assertTrue(s.loadSaved())
         for (item in listOf(Equipment.ECM, Equipment.FUEL_SCOOPS, Equipment.ESCAPE_POD, Equipment.ENERGY_BOMB,
-            Equipment.ENERGY_UNIT, Equipment.DOCKING_COMPUTER, Equipment.GALACTIC_HYPERDRIVE)) {
+            Equipment.ENERGY_UNIT, Equipment.GALACTIC_HYPERDRIVE)) {
             assertEquals(Result.OK, s.buyEquipment(item), item.name)
         }
         assertEquals(Result.OK, s.buyEquipment(Equipment.BEAM_LASER, View.LEFT))

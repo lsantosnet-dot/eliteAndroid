@@ -58,7 +58,7 @@ class PlayerShip {
     /** ENGY = 2: a unidade de energia da marinha (recompensa da missão 2; recarga tripla). */
     var navyEnergyUnit = false
     /** DKCMP: computador de atracação. */
-    var dockingComputer = false
+    var dockingComputer = true // de fábrica neste remake (no original, item da loja)
     /** GHYP: hiperpropulsor galáctico (uso único). */
     var galacticHyperdrive = false
 
@@ -79,7 +79,7 @@ class PlayerShip {
         lasers[0] = PULSE_LASER; lasers.fill(0, 1)
         missiles = 3
         hasEcm = false; fuelScoops = false; escapePod = false; energyBomb = false
-        energyUnit = false; navyEnergyUnit = false; dockingComputer = false; galacticHyperdrive = false
+        energyUnit = false; navyEnergyUnit = false; dockingComputer = true; galacticHyperdrive = false
     }
 
     /** LASCT: contagem do pulso do laser em sincronismos verticais (50 por segundo). */

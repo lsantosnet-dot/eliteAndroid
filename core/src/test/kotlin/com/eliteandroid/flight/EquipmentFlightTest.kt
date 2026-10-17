@@ -148,11 +148,13 @@ class EquipmentFlightTest {
     }
 
     @Test
-    fun `docking computer needs the safe zone and a friendly station`() {
+    fun `docking computer is standard, needs the safe zone and a friendly station`() {
         val m = FlightModel(); m.launch(galaxy[7])
+        assertTrue(m.player.dockingComputer) // de fábrica
+        assertTrue(m.canUseDockingComputer())
+        m.player.dockingComputer = false
         assertFalse(m.canUseDockingComputer())
         m.player.dockingComputer = true
-        assertTrue(m.canUseDockingComputer())
         m.station!!.hostile = true
         assertFalse(m.canUseDockingComputer())
         assertFalse(deepSpace().also { it.player.dockingComputer = true }.canUseDockingComputer())
