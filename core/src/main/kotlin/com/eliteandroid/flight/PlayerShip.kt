@@ -46,6 +46,25 @@ class PlayerShip {
     /** ECM instalado (bulbo "E" do painel). */
     var hasEcm = false
 
+    /**
+     * LASER: potência por vista (frente, trás, esquerda, direita). O Cobra sai de fábrica
+     * com um laser de pulso (potência 15) só na frente.
+     */
+    val lasers = intArrayOf(15, 0, 0, 0)
+
+    /** LASCT: contagem do pulso do laser em sincronismos verticais (50 por segundo). */
+    var laserCount = 0f
+        private set
+
+    /** LASX/LASY: centro aleatório (±4 px em torno do centro da vista) do último disparo. */
+    var laserX = 0
+        private set
+    var laserY = 0
+        private set
+
+    /** O feixe aparece nos 3 primeiros sincronismos de cada pulso (LASCT 10..8). */
+    val laserBeamVisible: Boolean get() = laserCount >= 8f
+
     /** MCNT: contador do loop principal (agenda recargas e o pisca do painel). */
     var mainLoopCounter = 0f
         private set
@@ -60,7 +79,7 @@ class PlayerShip {
         jstx = 0f; jsty = 0f; speed = launchSpeed
         energy = 255f; foreShield = 255f; aftShield = 255f
         cabinTemp = 30f; laserTemp = 0f; altitude = 255f
-        alpha = 0f; beta = 0f
+        alpha = 0f; beta = 0f; laserCount = 0f
     }
 
     /**
@@ -111,6 +130,25 @@ class PlayerShip {
 
         alpha = -alp1(jstx) / 256f * kotlin.math.sign(jstx)
         beta = bet1(jsty) / 256f * kotlin.math.sign(jsty)
+    }
+
+    /**
+     * Loop principal partes 3 e 4: o laser só dispara com LASCT = 0, temperatura < 242 e
+     * um laser instalado na vista atual. Cada disparo: LASCT = 10 (pulso → 5 tiros/s),
+     * GNTMP += 8, energia −1 (DENGY) e centro do feixe em posição aleatória (LASLI).
+     * Retorna true se disparou neste passo. [seconds] é o tempo real do passo.
+     */
+    fun updateLaser(f: Float, seconds: Float, firing: Boolean, view: View): Boolean {
+        laserCount = (laserCount - 50f * seconds).coerceAtLeast(0f)
+        laserTemp = (laserTemp - f).coerceAtLeast(0f) // TT100: esfria 1 por ciclo
+        val power = lasers[view.ordinal]
+        if (!firing || laserCount > 0f || laserTemp >= 242f || power == 0) return false
+        laserCount = (power and 0b11111010).toFloat()
+        laserTemp = (laserTemp + 8f).coerceAtMost(255f)
+        energy = (energy - 1f).coerceAtLeast(0f)
+        laserX = 128 - 4 + kotlin.random.Random.nextInt(8)
+        laserY = 96 - 4 + kotlin.random.Random.nextInt(8)
+        return true
     }
 
     /** Batida leve (MA67): para a nave (DELTA = 1) e causa 5 de dano por ciclo. */

@@ -29,6 +29,8 @@ class ShipBlueprint private constructor(
     val faceCount: Int,
     /** Byte #13 do modelo: além de z_hi (z/256) maior que isto, a nave vira um ponto. */
     val visibilityDistance: Int,
+    /** Bytes #1-2 ("targetable area"): o laser acerta se x² + y² < este valor (HITCH). */
+    val targetableArea: Int,
 ) {
     val vertexCount: Int get() = vertices.size / 3
     val edgeCount: Int get() = edges.size / 4
@@ -111,6 +113,9 @@ class ShipBlueprint private constructor(
         /** Byte #13 do bloco do modelo ("Visibility distance"). */
         var visibilityDistance = 31
 
+        /** Bytes #1-2 do bloco do modelo ("Targetable area"). */
+        var targetableArea = 0
+
         fun vertex(x: Int, y: Int, z: Int) {
             verts += x.toFloat(); verts += y.toFloat(); verts += z.toFloat()
         }
@@ -129,7 +134,7 @@ class ShipBlueprint private constructor(
         fun build(): ShipBlueprint =
             ShipBlueprint(
                 name, verts.toFloatArray(), edgeData.toIntArray(), edgeVis.toIntArray(),
-                edgeDet.toBooleanArray(), faces, visibilityDistance,
+                edgeDet.toBooleanArray(), faces, visibilityDistance, targetableArea,
             )
     }
 

@@ -21,13 +21,17 @@ class EliteGame : ApplicationAdapter() {
 
     lateinit var session: GameSession
         private set
+
+    /** Para a interface Android: null até o create() rodar na thread do GL. */
+    @Volatile var sessionOrNull: GameSession? = null
+        private set
     private lateinit var view: SpaceView
 
     override fun create() {
-        session = GameSession(currentSystem.name)
+        session = GameSession(galaxy, currentSystem)
         view = SpaceView()
         resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
-        Gdx.input.inputProcessor = session.input
+        sessionOrNull = session
     }
 
     override fun resize(width: Int, height: Int) {

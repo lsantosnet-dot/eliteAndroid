@@ -16,10 +16,11 @@ class FlightControls {
     var accelerate = false
     var decelerate = false
     var targetSpeed: Float? = null
+    var fire = false
 }
 
 /** Resultado de um passo de simulação. */
-enum class FlightEvent { NONE, DOCKED, BUMPED, CRASHED }
+enum class FlightEvent { NONE, DOCKED, BUMPED, CRASHED, HYPERSPACE }
 
 /**
  * A "bolha local" do universo e a física de voo do original:
@@ -48,6 +49,9 @@ class FlightModel {
 
     private var accumulator = 0f
 
+    /** Contagem regressiva do hiperespaço (QQ22). */
+    val hyperspace = HyperspaceCountdown()
+
     /** TT110: sai da estação — ela fica logo atrás (z = −256) com a fenda voltada para nós. */
     fun launch() {
         ships.clear()
@@ -57,6 +61,7 @@ class FlightModel {
         ships += st
         station = st
         player.reset()
+        hyperspace.cancel()
         view = View.FRONT
         dust.reset(view)
     }
@@ -81,6 +86,7 @@ class FlightModel {
             f, controls.rollKey, controls.pitchKey, controls.stickX, controls.stickY,
             controls.accelerate, controls.decelerate, controls.targetSpeed,
         )
+        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) checkLaserHits()
         val alpha = player.alpha * f
         val beta = player.beta * f
         val distance = player.speed * f
@@ -91,8 +97,23 @@ class FlightModel {
         }
         dust.update(alpha, beta, distance, view)
         player.updateSystems(f)
+        if (hyperspace.update(f)) return FlightEvent.HYPERSPACE
 
         return checkDocking(f)
+    }
+
+    /**
+     * HITCH: uma nave está na mira se estiver à frente, com |x| e |y| < 256 e
+     * x² + y² menor que a "targetable area" do modelo. Acertar a estação a deixa hostil
+     * (MA14); ela não pode ser destruída.
+     */
+    private fun checkLaserHits() {
+        for (ship in ships) {
+            val p = ship.position
+            if (p.z <= 0f || abs(p.x) >= 256f || abs(p.y) >= 256f) continue
+            if (p.x * p.x + p.y * p.y >= ship.blueprint.targetableArea) continue
+            if (ship === station) ship.hostile = true
+        }
     }
 
     /**

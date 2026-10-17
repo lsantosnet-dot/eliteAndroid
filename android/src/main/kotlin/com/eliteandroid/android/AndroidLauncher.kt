@@ -14,18 +14,16 @@ import androidx.core.content.ContextCompat
 import com.badlogic.gdx.backends.android.AndroidApplication
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration
 import com.eliteandroid.EliteGame
+import com.eliteandroid.android.ui.FlightControlsOverlay
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
 import java.util.Locale
 
 /**
- * Activity principal: a superfície LibGDX ocupa a tela inteira e as Views Android
- * (HUD/menus/controles touch) ficam sobrepostas em um FrameLayout.
- *
- * Etapa 3: voo. Os controles touch provisórios são desenhados pelo próprio jogo (ver
- * FlightInput); a interface definitiva em Views Android chega na Etapa 5.
- * Toque em [ DATA ] para abrir/fechar a ficha "Data on"; toque na ficha para percorrer os
- * sistemas a até 7 LY de Lave.
+ * Activity principal: a superfície LibGDX ocupa a tela inteira e as Views Android ficam
+ * sobrepostas num FrameLayout — controles de voo ([FlightControlsOverlay]) e a ficha
+ * "Data on" (toque em [ DATA ]; toque na ficha para percorrer os sistemas a até 7 LY e
+ * escolhê-los como destino do hiperespaço).
  */
 class AndroidLauncher : AndroidApplication() {
 
@@ -46,16 +44,15 @@ class AndroidLauncher : AndroidApplication() {
         }
         val gdxView = initializeForView(game, config)
 
-        titleView = hudText(16f).apply {
+        titleView = hudText(15f).apply {
             text = "[ DATA ]"
             setOnClickListener { toggleData() }
         }
-        dataView = hudText(14f).apply {
+        dataView = hudText(13f).apply {
             setBackgroundColor(ContextCompat.getColor(context, R.color.hud_dim))
             visibility = View.GONE
             setOnClickListener { showNextInRange() }
         }
-
         val hud = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(titleView)
@@ -64,6 +61,7 @@ class AndroidLauncher : AndroidApplication() {
 
         val root = FrameLayout(this).apply {
             addView(gdxView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(FlightControlsOverlay(this@AndroidLauncher, game), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(hud, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.START or Gravity.TOP))
         }
         setContentView(root)
@@ -74,7 +72,7 @@ class AndroidLauncher : AndroidApplication() {
         typeface = Typeface.MONOSPACE
         setTextColor(ContextCompat.getColor(context, R.color.neon_green))
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-        setPadding(32, 20, 32, 20)
+        setPadding(32, 16, 32, 16)
     }
 
     private fun toggleData() {
@@ -82,14 +80,19 @@ class AndroidLauncher : AndroidApplication() {
     }
 
     private fun showNextInRange() {
-        val here = game.currentSystem
+        val here = game.sessionOrNull?.currentSystem ?: game.currentSystem
         val candidates = listOf(here) + game.galaxy.inRange(here)
         browseIndex = (browseIndex + 1) % candidates.size
-        show(candidates[browseIndex])
+        val system = candidates[browseIndex]
+        // Escolher um sistema na ficha também o define como destino do hiperespaço.
+        game.sessionOrNull?.hyperspaceTarget = if (system.index == here.index) null else system
+        titleView.text = if (system.index == here.index) "[ DATA ]" else "[ DATA ]  TARGET: ${system.name}"
+        show(system)
     }
 
     private fun show(system: PlanetSystem) {
-        val dist = GalaxyGenerator.distance(game.currentSystem, system)
+        val here = game.sessionOrNull?.currentSystem ?: game.currentSystem
+        val dist = GalaxyGenerator.distance(here, system)
         dataView.text = buildString {
             appendLine("GALAXY ${system.galaxyNumber}  ·  DATA ON ${system.name}")
             appendLine("Distance: %.1f Light Years".format(Locale.US, dist / 10.0))

@@ -13,9 +13,10 @@ core/     Kotlin/JVM puro — lógica do jogo + LibGDX core (testável sem Andro
   ships/    ShipBlueprint, Blueprints (Coriolis, Cobra Mk III), ShipInstance (nosev/roofv/sidev)
   flight/   FlightModel (MVEIT, ISDK), PlayerShip (JSTX/JSTY, α/β, DELTA), View (PLUT)
   hud/      Dashboard (DIALS, COMPAS), Scanner (SCAN — radar 3D "prato")
-  input/    FlightInput (teclado do original + toque provisório)
+  input/    FlightInput (teclado do original), TouchControls (ponte UI Android → jogo)
   render/   WireframeProjector, NeonLineBatch, BloomRenderer, Stardust, LaunchTunnel, SpaceView
 android/  App Android — AndroidLauncher (LibGDX view + overlays Android Views)
+  ui/       FlightControlsOverlay, JoystickView, ThrottleView, NeonButton, NeonStyle
 desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 ```
 
@@ -25,7 +26,7 @@ desktop/  Launcher LWJGL3 para desenvolvimento no PC e capturas de tela
 2. ✅ Renderização 3D wireframe neon + Cobra Mk III e estação Coriolis
 3. ✅ Física de voo, câmeras e docking
 4. ✅ Scanner 3D e HUD
-5. ⏳ Controles touch
+5. ✅ Controles touch
 6. ⏳ Economia, mercado e hiperespaço
 
 ## Build
@@ -94,16 +95,6 @@ Tudo conferido com o fonte comentado do Mark Moxon (`elite-source.asm`, versão 
 **Ritmo:** no BBC Micro a duração de um ciclo do loop principal variava com a carga;
 usamos 12 ciclos/s (`FlightModel.TICK_RATE`), simulados em passos fixos de 1/60 s.
 
-**Controles provisórios** (a interface touch definitiva é a Etapa 5):
-
-| | Teclado (desktop) | Toque |
-|---|---|---|
-| Rolar | `<` `>` (ou `,` `.` / ← →) | arrastar na metade esquerda |
-| Arfar | `X` sobe o nariz, `S` desce (ou ↓ ↑) | idem (puxar para baixo sobe o nariz) |
-| Velocidade | Espaço acelera, `/` desacelera | faixa à direita |
-| Vistas | F1–F4 ou 1–4 | botões F R L D |
-| Decolar | `L` ou Enter | botão LAUNCH |
-
 ## Radar 3D e painel do cockpit (Etapa 4)
 
 ![Painel do cockpit](docs/etapa4-painel.png)
@@ -129,3 +120,35 @@ centralizado embaixo (os lados ficam livres para os controles touch):
   escudos sobem 1; depois a energia sobe 1.
 
 Ainda não há planeta, então a altitude fica no máximo e a bússola aponta para a estação.
+
+## Controles touch (Etapa 5)
+
+![Laser de pulso](docs/etapa5-laser.png)
+
+Interface em Views Android sobrepostas à superfície LibGDX (`android/.../ui`), no mesmo
+estilo neon, comunicando-se com o jogo por `TouchControls` (campos `@Volatile`):
+
+| Controle | Toque | Teclado (desktop, teclas do original) |
+|---|---|---|
+| Rolar / arfar | manche flutuante na esquerda (aparece onde o polegar toca; puxar para baixo sobe o nariz) | `<` `>` / `X` `S` (ou setas) |
+| Velocidade | acelerador vertical na direita (alvo 1–40; a nave acelera 1 por ciclo) | Espaço / `/` |
+| Laser | **FIRE** (segurar) | `A` |
+| Hiperespaço | **HYPER** (mostra a contagem) | `H` |
+| Vistas | **F R L D** no canto superior direito | F1–F4 ou 1–4 |
+| Decolar | **LAUNCH** quando atracado | `L` ou Enter |
+| Destino | toque na ficha **[ DATA ]** para percorrer os sistemas a até 7 LY | — |
+
+O manche funciona como o joystick analógico do original (define JSTX/JSTY direto); ao
+soltá-lo, o amortecimento do teclado recentraliza aos poucos.
+
+**Laser** (loop principal partes 3 e 4, LASLI, HITCH): o Cobra sai com laser de pulso só
+na frente. Dispara com LASCT = 0 e temperatura < 242; cada tiro faz LASCT = 10 (contado a
+50 Hz → 5 tiros/s, feixe visível nos 3 primeiros), GNTMP += 8 e energia −1; esfria 1 por
+ciclo. Os feixes saem de x = 32/224 e 48/208 da borda inferior até um centro aleatório
+±4 px. Acerta se a nave estiver à frente com x² + y² < "targetable area" do modelo —
+atirar na estação a deixa **hostil**, e aí atracar vira colisão.
+
+**Hiperespaço** (hyp/wW/QQ22): exige um destino diferente do sistema atual e combustível
+suficiente ("RANGE?" se não houver); contagem de 15 na tela — o primeiro passo leva 15
+ciclos e os seguintes 5 (85 ciclos). Ao zerar, toca o túnel do hiperespaço; a chegada ao
+novo sistema é a Etapa 6.

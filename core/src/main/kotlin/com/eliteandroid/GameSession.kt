@@ -1,5 +1,7 @@
 package com.eliteandroid
 
+import com.badlogic.gdx.Application
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
@@ -7,7 +9,9 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Rectangle
 import com.eliteandroid.flight.FlightEvent
 import com.eliteandroid.flight.FlightModel
-import com.eliteandroid.flight.View
+import com.eliteandroid.galaxy.Galaxy
+import com.eliteandroid.galaxy.GalaxyGenerator
+import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.hud.Dashboard
 import com.eliteandroid.input.FlightInput
 import com.eliteandroid.render.HudLayer
@@ -17,19 +21,26 @@ import com.eliteandroid.render.NeonPalette
 import com.eliteandroid.render.SpaceView
 
 /**
- * Ciclo de jogo da Etapa 3: atracado → túnel de lançamento → voo → (atracação → túnel →
- * atracado) ou (destruição → atracado). O mercado e as telas da estação chegam na Etapa 6.
+ * Ciclo de jogo: atracado → túnel de lançamento → voo → (atracação → túnel → atracado),
+ * (destruição → atracado) ou (contagem → hiperespaço). O salto entre sistemas e o mercado
+ * chegam na Etapa 6.
  */
-class GameSession(private val stationName: String) {
+class GameSession(val galaxy: Galaxy, currentSystem: PlanetSystem) {
 
-    enum class State { DOCKED, LAUNCHING, FLYING, DOCKING, DESTROYED }
+    enum class State { DOCKED, LAUNCHING, FLYING, DOCKING, DESTROYED, HYPERSPACE }
 
     val model = FlightModel()
     val input = FlightInput()
     val dashboard = Dashboard()
 
-    var state = State.DOCKED
+    /** Lidos também pela interface Android (thread de UI). */
+    @Volatile var state = State.DOCKED
         private set
+    @Volatile var currentSystem: PlanetSystem = currentSystem
+        private set
+    /** Sistema escolhido para o hiperespaço (QQ9/QQ10 do original). */
+    @Volatile var hyperspaceTarget: PlanetSystem? = null
+
     private var stateTime = 0f
     private var message: String? = null
     private var messageTime = 0f
@@ -47,19 +58,43 @@ class GameSession(private val stationName: String) {
             State.DOCKED -> if (input.launchRequested) enter(State.LAUNCHING)
             State.LAUNCHING -> if (stateTime >= LaunchTunnel.DURATION) {
                 model.launch()
-                input.throttleTarget = model.player.speed
                 enter(State.FLYING)
             }
-            State.FLYING -> when (model.update(delta, input.controls)) {
-                FlightEvent.DOCKED -> enter(State.DOCKING)
-                FlightEvent.CRASHED -> enter(State.DESTROYED)
-                FlightEvent.BUMPED -> flash("BUMP")
-                FlightEvent.NONE -> Unit
+            State.FLYING -> {
+                if (input.hyperspaceRequested) requestHyperspace()
+                when (model.update(delta, input.controls)) {
+                    FlightEvent.DOCKED -> enter(State.DOCKING)
+                    FlightEvent.CRASHED -> enter(State.DESTROYED)
+                    FlightEvent.BUMPED -> flash("BUMP")
+                    FlightEvent.HYPERSPACE -> enter(State.HYPERSPACE)
+                    FlightEvent.NONE -> Unit
+                }
             }
             State.DOCKING -> if (stateTime >= LaunchTunnel.DURATION) enter(State.DOCKED)
             State.DESTROYED -> if (stateTime >= 3f) enter(State.DOCKED)
+            State.HYPERSPACE -> if (stateTime >= HYPERSPACE_TUNNEL) {
+                // A chegada ao novo sistema (consumo de combustível, nova estação, mercado)
+                // é a Etapa 6. Por ora o túnel termina e voltamos ao voo.
+                enter(State.FLYING)
+                flash("ARRIVAL - STAGE 6")
+            }
         }
         input.launchRequested = false
+        input.hyperspaceRequested = false
+    }
+
+    /**
+     * hyp: só em voo, sem contagem em andamento, com um destino diferente do sistema atual
+     * e combustível suficiente; senão o original mostra "Range?".
+     */
+    private fun requestHyperspace() {
+        if (model.hyperspace.active) return
+        val target = hyperspaceTarget
+        if (target == null || target.index == currentSystem.index) { flash("NO TARGET"); return }
+        val distance = GalaxyGenerator.distance(currentSystem, target)
+        if (distance > model.player.fuel) { flash("RANGE?"); return }
+        model.hyperspace.start()
+        flash("HYPERSPACE - ${target.name}")
     }
 
     /** Pula direto para o voo (capturas de tela e testes). */
@@ -75,11 +110,10 @@ class GameSession(private val stationName: String) {
 
     private fun flash(text: String) {
         message = text
-        messageTime = 1f
+        messageTime = 2f
     }
 
     fun layout(width: Float, height: Float) {
-        input.layout(width, height)
         dashboard.layout(width, height)
     }
 
@@ -106,12 +140,13 @@ class GameSession(private val stationName: String) {
         when (state) {
             State.LAUNCHING, State.DOCKING ->
                 LaunchTunnel.draw(stateTime / LaunchTunnel.DURATION, w, h, lines, NeonPalette.STATION)
+            State.HYPERSPACE ->
+                LaunchTunnel.draw((stateTime / HYPERSPACE_TUNNEL) % 1f, w, h, lines, NeonPalette.HYPERSPACE)
             State.FLYING -> {
                 drawSight(w, h, lines)
-                drawTouchControls(lines)
+                if (model.player.laserBeamVisible) drawLaser(w, h, lines)
             }
-            State.DOCKED -> rect(input.launchButton, lines, NeonPalette.PLAYER_SHIP)
-            State.DESTROYED -> Unit
+            else -> Unit
         }
     }
 
@@ -124,33 +159,17 @@ class GameSession(private val stationName: String) {
         lines.segment(cx, cy - b, cx, cy - a, c); lines.segment(cx, cy + a, cx, cy + b, c)
     }
 
-    /** Controles touch provisórios (Etapa 5 traz a interface definitiva). */
-    private fun drawTouchControls(lines: NeonLineBatch) {
-        val dim = NeonPalette.HUD_DIM
-        input.viewButtons.forEachIndexed { i, r ->
-            rect(r, lines, if (View.entries[i] == model.view) NeonPalette.PLAYER_SHIP else dim)
-        }
-        val t = input.throttleBar
-        rect(t, lines, dim)
-        val level = t.y + t.height * (model.player.speed - 1f) / 39f
-        lines.segment(t.x, level, t.x + t.width, level, NeonPalette.PLAYER_SHIP)
-        if (input.stickPointer >= 0) {
-            val ox = input.stickOriginX; val oy = input.stickOriginY; val r = input.stickRadius
-            var px = ox + r; var py = oy
-            for (i in 1..32) {
-                val a = i * (2f * Math.PI.toFloat() / 32)
-                val x = ox + r * kotlin.math.cos(a); val y = oy + r * kotlin.math.sin(a)
-                lines.segment(px, py, x, y, dim); px = x; py = y
-            }
-            lines.segment(ox, oy, ox + input.stickX * r, oy - input.stickY * r, NeonPalette.PLAYER_SHIP)
-        }
-    }
-
-    private fun rect(r: Rectangle, lines: NeonLineBatch, c: Float) {
-        lines.segment(r.x, r.y, r.x + r.width, r.y, c)
-        lines.segment(r.x + r.width, r.y, r.x + r.width, r.y + r.height, c)
-        lines.segment(r.x + r.width, r.y + r.height, r.x, r.y + r.height, c)
-        lines.segment(r.x, r.y + r.height, r.x, r.y, c)
+    /**
+     * LASLI: dois pares de linhas da borda inferior da vista (x = 32/224 e 48/208 numa vista
+     * de 256 × 192) até o centro aleatório (LASX, LASY).
+     */
+    private fun drawLaser(w: Float, h: Float, lines: NeonLineBatch) {
+        val k = w / 256f
+        fun sx(x: Int) = w / 2f + (x - 128) * k
+        fun sy(y: Int) = h / 2f - (y - 96) * k
+        val p = model.player
+        val tx = sx(p.laserX); val ty = sy(p.laserY)
+        for (x in intArrayOf(32, 224, 48, 208)) lines.segment(sx(x), sy(191), tx, ty, NeonPalette.LASER)
     }
 
     private fun drawText(view: SpaceView, batch: SpriteBatch, font: BitmapFont) {
@@ -158,16 +177,15 @@ class GameSession(private val stationName: String) {
         font.color = HUD_GREEN
         when (state) {
             State.DOCKED -> {
-                centered(batch, font, "DOCKED  -  $stationName", w / 2f, h * 0.62f)
-                centered(batch, font, "LAUNCH", w / 2f, input.launchButton.y + input.launchButton.height * 0.65f)
+                centered(batch, font, "DOCKED  -  ${currentSystem.name}", w / 2f, h * 0.62f)
+                if (Gdx.app?.type == Application.ApplicationType.Desktop)
+                    centered(batch, font, "L / ENTER  TO LAUNCH", w / 2f, h * 0.45f)
             }
             State.FLYING -> {
                 centered(batch, font, model.view.label, w / 2f, h - font.lineHeight * 0.6f)
-                VIEW_LABELS.forEachIndexed { i, s ->
-                    val r = input.viewButtons[i]
-                    centered(batch, font, s, r.x + r.width / 2f, r.y + r.height * 0.65f)
-                }
-                if (messageTime > 0f) message?.let { centered(batch, font, it, w / 2f, h * 0.35f) }
+                // Número da contagem do hiperespaço (QQ22+1).
+                if (model.hyperspace.active) centered(batch, font, model.hyperspace.shown.toString(), w / 2f, h - font.lineHeight * 1.8f)
+                if (messageTime > 0f) message?.let { centered(batch, font, it, w / 2f, h * 0.68f) }
             }
             State.DESTROYED -> centered(batch, font, "GAME OVER", w / 2f, h * 0.55f)
             else -> Unit
@@ -181,6 +199,6 @@ class GameSession(private val stationName: String) {
 
     private companion object {
         val HUD_GREEN = Color(0.35f, 1f, 0.45f, 1f)
-        val VIEW_LABELS = arrayOf("F", "R", "L", "D") // frente, ré (trás), esquerda, direita
+        const val HYPERSPACE_TUNNEL = 2.4f
     }
 }
