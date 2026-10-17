@@ -327,6 +327,32 @@ Também da versão em disco: a cada 256 abates, "RIGHT ON COMMANDER!"; abates a 
 placas de liga e contêineres; e o **laser de mineração** parte asteroides em fragmentos.
 O estado das missões vai no jogo salvo (versão 3).
 
+## Som
+
+O som é o do BBC Micro **emulado**, não gravado: `audio/BeebSound` imita o chip SN76489
+(três canais de onda quadrada e um de ruído, com o registrador de deslocamento de 15
+bits e a atenuação de 2 dB por nível) comandado como pelo sistema operacional do BBC —
+os comandos SOUND (canal, amplitude, altura em quartos de semitom, duração em vinteavos
+de segundo, fila ou "flush") e ENVELOPE (três seções de altura e as fases de ataque,
+decaimento, sustentação e liberação, a 100 Hz). `audio/SoundEffects` tem a tabela **SFX**
+e os quatro envelopes do loader (E%), e as rotinas NOISE, EXNO, EXNO3 e BEEP:
+
+| Som | Quando |
+|---|---|
+| Laser (envelope 1) | cada tiro nosso — o de feixe reinicia o som a cada ciclo |
+| Acerto / abate (EXNO) | ruído mais baixo quanto mais longe a nave (z_hi) |
+| Laser nos atingindo (envelope 2) | só sem E.C.M. ligado |
+| Explosão (EXNO3) | morte, colisão, batida na estação, contêiner destruído, dano que passa dos escudos, míssil nos atingindo — o ruído segue a altura do canal 1, varrida pelo envelope 3 |
+| Lançamento | mísseis (nossos e inimigos), decolagem e atracação |
+| Hiperespaço (envelope 2 no canal de ruído) | ao entrar no túnel |
+| E.C.M. (envelope 4) | do acionamento até o fim (nosso ou do inimigo) |
+| Bipe curto | trava do míssil, ENERGY LOW, FUEL SCOOPS ON, erros nas telas da estação |
+| Bipe longo | desarmar o míssil, salto "J" recusado |
+
+O áudio sai por um `AudioDevice` do LibGDX (Android e desktop), numa thread própria.
+**SOUND ON/OFF** fica na aba STATUS (lembrado entre sessões). Para ouvir todos os efeitos
+em sequência num WAV: `./gradlew :desktop:run --args="--sound-demo sons.wav"`.
+
 ## Loja de equipamentos
 
 ![Laser de feixe](docs/feixe.png)

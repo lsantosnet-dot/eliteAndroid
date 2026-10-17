@@ -2,6 +2,8 @@ package com.eliteandroid
 
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
+import com.eliteandroid.audio.AudioOutput
+import com.eliteandroid.audio.BeebSound
 import com.eliteandroid.galaxy.Galaxy
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
@@ -28,11 +30,18 @@ class EliteGame : ApplicationAdapter() {
         private set
     private lateinit var view: SpaceView
 
+    /** O chip de som do BBC emulado e a saída de áudio. */
+    private val synth = BeebSound()
+    private var audio: AudioOutput? = null
+
     override fun create() {
         session = GameSession(galaxy, currentSystem)
         // Continua de onde parou: carrega o último comandante salvo, se houver.
         session.storage = PreferencesStorage()
         session.loadSaved()
+        session.sound.synth = synth
+        session.sound.muted = !Options.soundOn
+        audio = AudioOutput(synth).also { it.start() }
         view = SpaceView()
         resize(Gdx.graphics.backBufferWidth, Gdx.graphics.backBufferHeight)
         sessionOrNull = session
@@ -52,9 +61,33 @@ class EliteGame : ApplicationAdapter() {
     /** O app foi para segundo plano: se estiver atracado, grava o comandante. */
     override fun pause() {
         if (::session.isInitialized) session.save()
+        audio?.stop()
+        synth.silence()
     }
 
+    override fun resume() {
+        audio?.start()
+    }
+
+    /** Liga ou desliga o som (DNOIZ), lembrando a escolha. */
+    fun setSoundOn(on: Boolean) {
+        Options.soundOn = on
+        sessionOrNull?.sound?.muted = !on
+        if (!on) synth.silence()
+    }
+
+    val soundOn: Boolean get() = Options.soundOn
+
     override fun dispose() {
+        audio?.stop()
         view.dispose()
+    }
+
+    /** Opções do jogador, nas Preferences do LibGDX. */
+    private object Options {
+        private val prefs get() = Gdx.app.getPreferences("elite-options")
+        var soundOn: Boolean
+            get() = prefs.getBoolean("sound", true)
+            set(v) { prefs.putBoolean("sound", v); prefs.flush() }
     }
 }

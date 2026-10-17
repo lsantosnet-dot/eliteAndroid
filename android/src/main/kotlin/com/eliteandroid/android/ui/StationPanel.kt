@@ -29,7 +29,13 @@ import java.util.Locale
  * level do sistema), CHART (mapas) e DATA (Data on System). LAUNCH decola.
  */
 @SuppressLint("ViewConstructor")
-class StationPanel(context: Context, private val session: () -> GameSession?) : LinearLayout(context) {
+class StationPanel(
+    context: Context,
+    private val session: () -> GameSession?,
+    /** Som ligado (DNOIZ) — lido e alterado pela aba STATUS. */
+    private val soundOn: () -> Boolean = { true },
+    private val setSoundOn: (Boolean) -> Unit = {},
+) : LinearLayout(context) {
 
     private val density = resources.displayMetrics.density
     private fun dp(v: Float) = (v * density).toInt()
@@ -59,6 +65,14 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
 
     private val rowViews = ArrayList<Array<TextView>>()
 
+    /** Liga/desliga o som (declarado antes do init, que o põe na aba STATUS). */
+    private val soundButton: TextView by lazy {
+        button("SOUND", NeonStyle.YELLOW) {
+            setSoundOn(!soundOn())
+            updateSoundButton()
+        }
+    }
+
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.argb(235, 0, 4, 10))
@@ -84,7 +98,8 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
             orientation = HORIZONTAL
             addView(button("SAVE GAME", NeonStyle.GREEN) { saveGame() }, LayoutParams(0, dp(42f), 1f).apply { marginEnd = dp(6f) })
             addView(button("SAVE & EXIT", NeonStyle.CYAN) { saveAndExit() }, LayoutParams(0, dp(42f), 1f).apply { marginEnd = dp(6f) })
-            addView(button("NEW GAME", NeonStyle.RED) { newGame() }, LayoutParams(0, dp(42f), 1f))
+            addView(button("NEW GAME", NeonStyle.RED) { newGame() }, LayoutParams(0, dp(42f), 1f).apply { marginEnd = dp(6f) })
+            addView(soundButton, LayoutParams(0, dp(42f), 1f))
         }
         statusBox.addView(saveRow)
         buildEquipRows()
@@ -179,10 +194,23 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
         }
     }
 
+    private fun updateSoundButton() {
+        soundButton.text = if (soundOn()) "SOUND ON" else "SOUND OFF"
+        soundButton.alpha = if (soundOn()) 1f else 0.55f
+    }
+
+    /** Mensagem de erro com o bipe do original (dn2). */
+    private fun error(text: String) {
+        feedback.text = text
+        session()?.errorBeep()
+    }
+
     private fun buyEquipment(item: Equipment) {
         val sess = session() ?: return
         val cost = Equipment.price(item, sess.model.player)
-        feedback.text = when (sess.buyEquipment(item, laserView)) {
+        val result = sess.buyEquipment(item, laserView)
+        if (result != Equipment.Result.OK) sess.errorBeep()
+        feedback.text = when (result) {
             Equipment.Result.OK -> "${item.label.uppercase(Locale.US)} FITTED: " + Commander.formatCredits(cost)
             Equipment.Result.NO_CASH -> "NOT ENOUGH CASH"
             Equipment.Result.PRESENT -> if (item.needsView) "LASER PRESENT" else "${item.label.uppercase(Locale.US)} PRESENT"
@@ -222,6 +250,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     private fun trade(index: Int, buy: Boolean) {
         val sess = session() ?: return
         val r = if (buy) sess.buy(index) else sess.sell(index)
+        if (r != Commander.TradeResult.OK) sess.errorBeep()
         feedback.text = when (r) {
             Commander.TradeResult.OK -> ""
             Commander.TradeResult.NO_STOCK -> "NONE FOR SALE"
@@ -233,12 +262,12 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     }
 
     private fun saveGame() {
-        feedback.text = if (session()?.save() == true) "GAME SAVED" else "CAN ONLY SAVE WHILE DOCKED"
+        if (session()?.save() == true) feedback.text = "GAME SAVED" else error("CAN ONLY SAVE WHILE DOCKED")
     }
 
     private fun saveAndExit() {
         if (session()?.save() == true) (context as? android.app.Activity)?.finish()
-        else feedback.text = "CAN ONLY SAVE WHILE DOCKED"
+        else error("CAN ONLY SAVE WHILE DOCKED")
     }
 
     /** Recomeça como JAMESON em Lave; exige um segundo toque em até 3 s. */
@@ -258,6 +287,7 @@ class StationPanel(context: Context, private val session: () -> GameSession?) : 
     /** Atualiza os textos (chamado ao abrir e a cada ação). */
     fun refresh() {
         val sess = session() ?: return
+        updateSoundButton()
         val cmdr = sess.commander
         val here = sess.currentSystem
         val market = sess.market

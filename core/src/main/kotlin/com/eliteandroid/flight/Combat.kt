@@ -1,6 +1,7 @@
 package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
+import com.eliteandroid.audio.SoundEffects.Sfx
 import com.eliteandroid.economy.Commodities
 import com.eliteandroid.missions.Missions
 import com.eliteandroid.ships.Newb
@@ -27,6 +28,8 @@ import kotlin.random.Random
  * aqui os vetores são unitários e os limiares estão convertidos (ex.: 32/36).
  */
 class Combat(private val model: FlightModel) {
+
+    private val sound get() = model.sound
 
     var rng: Random = Random.Default
     private fun dornd() = rng.nextInt(256)
@@ -107,6 +110,7 @@ class Combat(private val model: FlightModel) {
         m.aiFlag = 0x80
         m.missileTarget = target
         if (!model.spawn(m)) return false // bolha cheia
+        sound.noise(Sfx.LAUNCH)
         angry(target)
         model.player.missiles--
         unarmMissile()
@@ -121,6 +125,7 @@ class Combat(private val model: FlightModel) {
         if (!model.player.hasEcm || ecmActive) return false
         ecmCycles = 32f
         ourEcm = true
+        sound.noise(Sfx.ECM_ON) // ECBLB2
         return true
     }
 
@@ -147,12 +152,14 @@ class Combat(private val model: FlightModel) {
             p.energy = (p.energy - f).coerceAtLeast(0f)
             if (p.energy <= 0f) ecmCycles = 0f
         }
+        val ecmWasOn = ecmCycles > 0f
         if (ecmCycles > 0f) ecmCycles = (ecmCycles - f).coerceAtLeast(0f)
         if (ecmCycles <= 0f) ourEcm = false
+        if (ecmWasOn && ecmCycles <= 0f) sound.noise(Sfx.ECM_OFF) // ECMOF
         // Míssil armado: trava no primeiro alvo que estiver na mira (HITCH).
         if (missileArmed && missileTarget == null) {
             model.ships.firstOrNull { !it.killed && it.type != ShipType.MISSILE && inCrosshairs(it) }
-                ?.let { missileTarget = it }
+                ?.let { missileTarget = it; sound.beep() } // trava: bipe curto
         }
         missileTarget?.let { if (it.killed || it !in model.ships) unarmMissile() }
         for (ship in model.ships) {
@@ -183,6 +190,7 @@ class Combat(private val model: FlightModel) {
     fun laserShot(laser: Int) {
         for (ship in model.ships.toList()) { // cópia: abates podem soltar destroços
             if (ship.killed || !inCrosshairs(ship)) continue
+            sound.exno(zHi(ship), 15) // MA47: acerto
             if (ship.type.isStation) { angry(ship); continue } // indestrutível
             var power = laser and 0x7F
             if (ship.type == ShipType.CONSTRICTOR) {
@@ -232,6 +240,7 @@ class Combat(private val model: FlightModel) {
         ship.killed = true
         ship.cloudCounter = 18f
         if (byUs) {
+            sound.exno(zHi(ship), 7) // EXNO2
             model.player.kills++
             if (model.player.kills % 256 == 0) messages += "RIGHT ON COMMANDER!"
         }
@@ -269,11 +278,13 @@ class Combat(private val model: FlightModel) {
                     messages += Commodities.ALL[item].name.uppercase()
                 } else {
                     kill(ship, byUs = false)
+                    sound.exno3() // MA59: contêiner destruído
                 }
                 continue
             }
             val damage = 128f + ship.energy.coerceAtLeast(0f) / 2f
             kill(ship, byUs = false)
+            sound.exno3() // MA58: colisão
             if (model.player.damage(damage, front = p.z >= 0f)) return true
         }
         return false
@@ -398,6 +409,9 @@ class Combat(private val model: FlightModel) {
         return Triple(pos, ai, dornd())
     }
 
+    /** z_hi: a distância em z, em unidades de 256 (para o volume das explosões). */
+    private fun zHi(ship: ShipInstance) = (abs(ship.position.z) / 256f).toInt()
+
     private fun signed(signSource: Int, magnitude: Float) = if (signSource and 0x80 != 0) -magnitude else magnitude
     private fun Int.toSigned(): Float = (this and 0x7F).toFloat().let { if (this and 0x80 != 0) -it else it }
 
@@ -461,6 +475,7 @@ class Combat(private val model: FlightModel) {
                     spawnChild(ship, ShipType.THARGON, ship.aiFlag)
                 } else if (spawnChild(ship, ShipType.MISSILE, 0b11000000, hostileToUs = true)) {
                     messages += "INCOMING MISSILE"
+                    sound.noise(Sfx.LAUNCH) // SFRMIS
                 }
                 return
             }
@@ -476,6 +491,7 @@ class Combat(private val model: FlightModel) {
                 if (model.player.damage((ship.blueprint.laserByte / 2).toFloat(), front = p.z >= 0f)) {
                     model.playerDestroyed = true
                 }
+                if (!ecmActive) sound.noise(Sfx.HIT_BY_LASER)
                 ship.acceleration -= 1f
                 applyAcceleration(ship)
                 return
@@ -590,12 +606,13 @@ class Combat(private val model: FlightModel) {
 
     /** TACTICS parte 1: mísseis. */
     private fun missileTactics(m: ShipInstance) {
-        if (ecmActive) { kill(m, byUs = false); return }
+        if (ecmActive) { kill(m, byUs = false); sound.exno(zHi(m), 7); return }
         val p = m.position
         if (m.isHostileMissile) {
             if (abs(p.x) < 256f && abs(p.y) < 256f && abs(p.z) < 256f) {
                 // Acertou-nos: dano 250.
                 kill(m, byUs = false)
+                sound.exno3()
                 if (model.player.damage(250f, front = p.z >= 0f)) model.playerDestroyed = true
                 return
             }
@@ -611,12 +628,14 @@ class Combat(private val model: FlightModel) {
             // Chegou ao alvo: a estação só destrói o míssil; outras naves explodem.
             if (!target.type.isStation) kill(target, byUs = true)
             kill(m, byUs = false)
+            sound.exno(zHi(m), 7) // TA87
             if (p.len() < 256f) model.player.damage(80f, front = p.z >= 0f)
             return
         }
         // 6%: o alvo tenta o E.C.M.
         if (dornd() < 16 && target.hasEcm) {
             ecmCycles = 32f
+            sound.noise(Sfx.ECM_ON) // ECBLB2
             messages += "E.C.M."
             return
         }

@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.math.Vector3
+import com.eliteandroid.audio.SoundEffects
 import com.eliteandroid.economy.Commander
 import com.eliteandroid.economy.Equipment
 import com.eliteandroid.economy.Market
@@ -140,13 +141,17 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
             }
             State.FLYING -> {
                 if (input.hyperspaceRequested) requestHyperspace()
-                if (input.jumpRequested && !model.inSystemJump()) flash("JUMP?")
+                if (input.jumpRequested && !model.inSystemJump()) { flash("JUMP?"); sound.boop() } // WA1
                 handleMissileInput()
                 if (handleEquipmentInput()) return
                 when (model.update(delta, input.controls)) {
                     FlightEvent.DOCKED -> enter(State.DOCKING)
                     FlightEvent.CRASHED -> enter(State.DESTROYED)
-                    FlightEvent.BUMPED -> flash("BUMP")
+                    FlightEvent.BUMPED -> {
+                        flash("BUMP")
+                        // MA63: cada batida soa como colisão (no máximo uma por ciclo).
+                        if (stateTime - lastBumpSound >= 1f / FlightModel.TICK_RATE) { sound.exno3(); lastBumpSound = stateTime }
+                    }
                     FlightEvent.HYPERSPACE -> {
                         if (input.ctrlHeld) forceMisjump = true // TT18: CTRL força o mis-jump
                         enter(State.HYPERSPACE)
@@ -300,11 +305,11 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     private fun handleMissileInput() {
         val c = model.combat
         if (input.missileArm) c.armMissile()
-        if (input.missileUnarm) c.unarmMissile()
+        if (input.missileUnarm && c.missileArmed) { c.unarmMissile(); sound.boop() } // MA4
         if (input.missileFire && !c.fireMissile() && c.missileArmed) flash("NO TARGET")
         if (input.missileSmart) when {
             c.missileTarget != null -> c.fireMissile()
-            c.missileArmed -> c.unarmMissile()
+            c.missileArmed -> { c.unarmMissile(); sound.boop() }
             model.player.missiles > 0 -> c.armMissile()
             else -> flash("NO MISSILES")
         }
@@ -457,7 +462,21 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         arrive()
     }
 
+    /** Os efeitos sonoros (o mesmo objeto do modelo de voo). */
+    val sound: SoundEffects get() = model.sound
+
+    private var lastBumpSound = -1f
+
+    /** dn2: bipe de erro nas telas da estação ("NOT ENOUGH CASH"...). */
+    fun errorBeep() = sound.beep()
+
     private fun enter(s: State) {
+        when (s) {
+            State.LAUNCHING, State.DOCKING -> sound.noise(SoundEffects.Sfx.LAUNCH) // LAUN
+            State.HYPERSPACE -> sound.noise(SoundEffects.Sfx.HYPERSPACE)          // LL164
+            State.DESTROYED -> sound.exno3()                                        // DEATH
+            else -> Unit
+        }
         // Atracar ou morrer durante a contagem galáctica a interrompe: o hiperpropulsor
         // volta para o porão (a ficha limpa fica).
         if (galacticJump && (s == State.DOCKING || s == State.DESTROYED)) {
@@ -466,6 +485,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         }
         state = s
         stateTime = 0f
+        lastBumpSound = -1f
     }
 
     private fun flash(text: String) {

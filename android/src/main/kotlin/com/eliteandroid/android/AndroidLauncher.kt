@@ -64,7 +64,7 @@ class AndroidLauncher : AndroidApplication() {
         val gdxView = initializeForView(game, config)
         val session = { game.sessionOrNull }
 
-        stationPanel = StationPanel(this, session).apply { visibility = View.GONE }
+        stationPanel = StationPanel(this, session, { game.soundOn }, { game.setSoundOn(it) }).apply { visibility = View.GONE }
 
         // Mapa em voo (o original permite consultar os mapas a qualquer momento).
         mapChart = ChartView(this, session)

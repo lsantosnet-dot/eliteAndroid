@@ -216,8 +216,12 @@ class PlayerShip {
             val absorbed = minOf(aftShield, rest); aftShield -= absorbed; rest -= absorbed
         }
         energy -= rest
+        if (rest > 0f && energy >= 0f) onHullHit()
         return energy < 0f
     }
+
+    /** Chamado quando um dano passa dos escudos sem nos matar. */
+    var onHullHit: () -> Unit = {}
 
     companion object {
         const val MIN_SPEED = 1f

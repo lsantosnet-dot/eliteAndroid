@@ -1,6 +1,7 @@
 package com.eliteandroid.flight
 
 import com.badlogic.gdx.math.Vector3
+import com.eliteandroid.audio.SoundEffects
 import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.missions.Missions
 import com.eliteandroid.render.NeonPalette
@@ -64,6 +65,14 @@ class FlightModel {
 
     /** Combate, tráfego e mísseis. */
     val combat = Combat(this)
+
+    /** Os efeitos sonoros (NOISE); sem sintetizador, ficam mudos. */
+    val sound = SoundEffects()
+
+    init {
+        // OOPS: dano que passa dos escudos e não mata soa como uma colisão (EXNO3).
+        player.onHullHit = { sound.exno3() }
+    }
 
     /** Morte causada pelo combate (laser ou míssil inimigo) neste passo. */
     var playerDestroyed = false
@@ -236,7 +245,10 @@ class FlightModel {
             f, controls.rollKey, controls.pitchKey, controls.stickX, controls.stickY,
             controls.accelerate, controls.decelerate, controls.targetSpeed,
         )
-        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) combat.laserShot(player.lasers[view.ordinal])
+        if (player.updateLaser(f, f / TICK_RATE, controls.fire, view)) {
+            sound.noise(SoundEffects.Sfx.LASER)
+            combat.laserShot(player.lasers[view.ordinal])
+        }
         val alpha = player.alpha * f
         val beta = player.beta * f
         val distance = player.speed * f
@@ -257,7 +269,7 @@ class FlightModel {
             when (tick % 32) {
                 0 -> if (spawnStation()) event = FlightEvent.STATION_APPEARED
                 10 -> {
-                    if (player.energy < 50f) combat.messages += "ENERGY LOW"
+                    if (player.energy < 50f) { combat.messages += "ENERGY LOW"; sound.beep() }
                     if (!checkAltitude()) return FlightEvent.CRASHED
                 }
                 20 -> if (!sunHeat()) return FlightEvent.CRASHED
@@ -335,6 +347,7 @@ class FlightModel {
         if (temp >= 224 && player.fuelScoops) {
             player.fuel = (player.fuel + (player.speed / 8f).toInt()).coerceAtMost(70f)
             combat.messages += "FUEL SCOOPS ON"
+            sound.beep()
         }
         return true
     }

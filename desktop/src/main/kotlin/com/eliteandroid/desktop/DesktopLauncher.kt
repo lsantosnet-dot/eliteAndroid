@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.PixmapIO
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration
 import com.eliteandroid.EliteGame
+import com.eliteandroid.audio.SoundEffects.Sfx
 import com.eliteandroid.flight.FlightControls
 import com.eliteandroid.flight.View
 
@@ -26,6 +27,7 @@ import com.eliteandroid.flight.View
  *   ./gradlew :desktop:run --args="--screenshot shot.png --time 2 --view rear"
  */
 fun main(args: Array<String>) {
+    args.valueAfter("--sound-demo")?.let { writeSoundDemo(java.io.File(it)); return }
     val shotPath = args.valueAfter("--screenshot")
     val shot = ShotSpec(
         time = args.valueAfter("--time")?.toFloat() ?: 0f,
@@ -52,6 +54,40 @@ fun main(args: Array<String>) {
     }
     val game = EliteGame()
     Lwjgl3Application(if (shotPath != null) ScreenshotWrapper(game, shotPath, shot) else game, config)
+}
+
+/**
+ * Grava um WAV com os efeitos sonoros do Elite em sequência, gerados pelo chip de som
+ * emulado (sem precisar de placa de som):
+ *   ./gradlew :desktop:run --args="--sound-demo sons.wav"
+ */
+private fun writeSoundDemo(file: java.io.File) {
+    val synth = com.eliteandroid.audio.BeebSound()
+    val fx = com.eliteandroid.audio.SoundEffects(synth)
+    val out = java.io.ByteArrayOutputStream()
+    val buf = FloatArray(synth.sampleRate / 20)
+    fun play(seconds: Float) = repeat((seconds * 20).toInt()) {
+        synth.render(buf)
+        for (v in buf) { val x = (v.coerceIn(-1f, 1f) * 32767).toInt(); out.write(x and 0xFF); out.write((x shr 8) and 0xFF) }
+    }
+    repeat(4) { fx.noise(Sfx.LASER); play(0.2f) }; play(1f)              // laser de pulso
+    repeat(12) { fx.noise(Sfx.LASER); play(1f / 12f) }; play(1.2f)       // laser de feixe
+    fx.exno(2, 15); play(0.6f); fx.exno(40, 15); play(0.8f)             // acertos perto/longe
+    fx.exno(4, 7); play(1.5f)                                           // abate
+    fx.noise(Sfx.HIT_BY_LASER); play(1f)                                  // laser nos atingindo
+    fx.noise(Sfx.LAUNCH); play(1f)                                        // míssil / decolagem
+    fx.beep(); play(0.5f); fx.boop(); play(0.8f)                        // bipes
+    fx.noise(Sfx.ECM_ON); play(1.6f); fx.noise(Sfx.ECM_OFF); play(0.5f)     // E.C.M.
+    fx.noise(Sfx.HYPERSPACE); play(2f)                                    // hiperespaço
+    fx.exno3(); play(2f)                                                // morte
+    val pcm = out.toByteArray()
+    val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+        put("RIFF".toByteArray()); putInt(36 + pcm.size); put("WAVEfmt ".toByteArray())
+        putInt(16); putShort(1); putShort(1); putInt(synth.sampleRate); putInt(synth.sampleRate * 2)
+        putShort(2); putShort(16); put("data".toByteArray()); putInt(pcm.size)
+    }
+    file.writeBytes(header.array() + pcm)
+    println("${file.path}: ${pcm.size / 2 / synth.sampleRate.toFloat()} s")
 }
 
 /** Cena de combate para capturas: piratas à frente, um explodindo e um míssil nosso a caminho. */
