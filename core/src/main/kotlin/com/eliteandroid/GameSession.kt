@@ -19,6 +19,7 @@ import com.eliteandroid.galaxy.Galaxy
 import com.eliteandroid.galaxy.GalaxyGenerator
 import com.eliteandroid.galaxy.PlanetSystem
 import com.eliteandroid.hud.Dashboard
+import com.eliteandroid.hud.NavMarker
 import com.eliteandroid.input.FlightInput
 import com.eliteandroid.missions.Missions
 import com.eliteandroid.render.HudLayer
@@ -50,6 +51,9 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     val model = FlightModel()
     val input = FlightInput()
     val dashboard = Dashboard()
+
+    /** Marcador de navegação para a estação (ou o planeta). */
+    private val navMarker = NavMarker()
 
     val commander = Commander()
 
@@ -137,6 +141,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
                 // TT110: sair com carga ilegal piora o status legal.
                 model.player.legalStatus = model.player.legalStatus or commander.contraband
                 model.launch(currentSystem)
+                navMarker.reset(model)
                 enter(State.FLYING)
             }
             State.FLYING -> {
@@ -144,6 +149,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
                 if (input.jumpRequested && !model.inSystemJump()) { flash("JUMP?"); sound.boop() } // WA1
                 handleMissileInput()
                 if (handleEquipmentInput()) return
+                navMarker.update(delta, model)
                 when (model.update(delta, input.controls)) {
                     FlightEvent.DOCKED -> enter(State.DOCKING)
                     FlightEvent.CRASHED -> enter(State.DESTROYED)
@@ -156,7 +162,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
                         if (input.ctrlHeld) forceMisjump = true // TT18: CTRL força o mis-jump
                         enter(State.HYPERSPACE)
                     }
-                    FlightEvent.STATION_APPEARED -> flash("SPACE STATION")
+                    FlightEvent.STATION_APPEARED -> flash("SPACE STATION", 4f)
                     FlightEvent.NONE -> Unit
                 }
                 if (messageTime <= 0f) model.combat.messages.removeFirstOrNull()?.let { flash(it) }
@@ -453,6 +459,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
     fun launchNow() {
         witchspace = null
         model.launch(currentSystem)
+        navMarker.reset(model)
         enter(State.FLYING)
     }
 
@@ -488,9 +495,9 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
         lastBumpSound = -1f
     }
 
-    private fun flash(text: String) {
+    private fun flash(text: String, seconds: Float = 2f) {
         message = text
-        messageTime = 2f
+        messageTime = seconds
     }
 
     fun layout(width: Float, height: Float) {
@@ -523,6 +530,7 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
             State.HYPERSPACE ->
                 LaunchTunnel.draw((stateTime / HYPERSPACE_TUNNEL) % 1f, w, h, lines, NeonPalette.HYPERSPACE)
             State.FLYING -> {
+                navMarker.drawLines(lines, view.projector, model, w, h, dashboard.bounds.y + dashboard.bounds.height)
                 drawSight(w, h, lines)
                 if (model.player.laserBeamVisible) drawLaser(view, w, h, lines)
                 if (model.combat.bombFlash > 0f) drawBombFlash(w, h, lines)
@@ -582,6 +590,8 @@ class GameSession(private val homeGalaxy: Galaxy, private val homeSystem: Planet
             }
             State.FLYING -> {
                 centered(batch, font, model.view.label, w / 2f, h - font.lineHeight * 0.6f)
+                navMarker.drawText(batch, font, w)
+                font.color = HUD_GREEN
                 // Número da contagem do hiperespaço (QQ22+1).
                 if (model.hyperspace.active) centered(batch, font, model.hyperspace.shown.toString(), w / 2f, h - font.lineHeight * 1.8f)
                 if (messageTime > 0f) message?.let { centered(batch, font, it, w / 2f, h * 0.68f) }

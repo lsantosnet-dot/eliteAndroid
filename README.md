@@ -129,6 +129,17 @@ centralizado embaixo (os lados ficam livres para os controles touch):
 
 Ainda não há planeta, então a altitude fica no máximo e a bússola aponta para a estação.
 
+## Marcador de navegação
+
+![Marcador de navegação](docs/navegacao.png)
+
+Uma ajuda que **não existe no original** (lá só há a bússola do painel), pensada para a
+tela do celular: o alvo da bússola — a **estação** (ciano) ou, enquanto ela não surge, o
+**planeta** (violeta) — ganha colchetes quando está na vista, ou uma **seta na borda** da
+tela apontando para onde virar quando está fora dela, com "(BEHIND)" se estiver atrás.
+Quando a estação surge, o marcador pisca por alguns segundos, "SPACE STATION" fica mais
+tempo na tela e o "S" do painel acende bem destacado.
+
 ## Controles touch (Etapa 5)
 
 ![Laser de pulso](docs/etapa5-laser.png)

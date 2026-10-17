@@ -79,8 +79,10 @@ class Dashboard {
             bar(lines, RIGHT_BAR_X, 3 + i, v.toFloat(), lowIsDanger = true, threshold = 3, flash = flash)
         }
 
-        // Bulbos: S (estação por perto, SPBLB) e E (E.C.M. ativo, ECBLB).
-        if (model.station != null) bulb(lines, BULB_S_X, PANEL_COLOR)
+        // Bulbos: S (estação por perto, SPBLB) e E (E.C.M. ativo, ECBLB). O "S" fica
+        // aceso (preenchido) para ser visto no celular.
+        stationLit = model.station != null
+        if (stationLit) { bulb(lines, BULB_S_X, PANEL_COLOR); bulb(lines, BULB_S_X, PANEL_COLOR, 4f) }
         if (model.combat.ecmActive) bulb(lines, BULB_E_X, PANEL_COLOR)
     }
 
@@ -133,10 +135,13 @@ class Dashboard {
         }
     }
 
-    private fun bulb(lines: NeonLineBatch, x: Float, c: Float) {
+    /** O "S" aceso: o texto é escrito por cima do bulbo preenchido. */
+    private var stationLit = false
+
+    private fun bulb(lines: NeonLineBatch, x: Float, c: Float, r: Float = 3f) {
         val y = 249f
-        seg(lines, x - 3f, y - 3f, x + 3f, y - 3f, c); seg(lines, x + 3f, y - 3f, x + 3f, y + 3f, c)
-        seg(lines, x + 3f, y + 3f, x - 3f, y + 3f, c); seg(lines, x - 3f, y + 3f, x - 3f, y - 3f, c)
+        seg(lines, x - r, y - r, x + r, y - r, c); seg(lines, x + r, y - r, x + r, y + r, c)
+        seg(lines, x + r, y + r, x - r, y + r, c); seg(lines, x - r, y + r, x - r, y - r, c)
     }
 
     /** Radar: prato elíptico com retícula, hastes e pontos (SCAN). */
@@ -194,7 +199,9 @@ class Dashboard {
         font.color = LABEL_COLOR
         LEFT_LABELS.forEachIndexed { i, s -> label(batch, font, s, 3f, rowY(i)) }
         RIGHT_LABELS.forEachIndexed { i, s -> label(batch, font, s, SCANNER_RIGHT + 2.5f, rowY(i)) }
+        if (stationLit) font.color = STATION_LABEL
         label(batch, font, "S", BULB_S_X - 1.8f, 249f)
+        font.color = LABEL_COLOR
         label(batch, font, "E", BULB_E_X - 1.8f, 249f)
         font.data.setScale(old)
     }
@@ -218,6 +225,7 @@ class Dashboard {
         private val RIGHT_LABELS = arrayOf("SP", "RL", "DC", "1", "2", "3", "4")
 
         private val PANEL_COLOR = Color(1f, 0.88f, 0.25f, 1f).toFloatBits()     // amarelo (cor 2 do painel)
+        private val STATION_LABEL = Color(1f, 0.88f, 0.25f, 1f)                  // o "S" aceso, em amarelo
         private val DANGER_COLOR = Color(1f, 0.15f, 0.25f, 1f).toFloatBits()    // vermelho
         private val SCANNER_COLOR = Color(0.15f, 0.95f, 0.75f, 1f).toFloatBits()
         private val SCANNER_GRID = Color(0.08f, 0.40f, 0.34f, 0.55f).toFloatBits()
